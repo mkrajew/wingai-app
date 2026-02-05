@@ -162,7 +162,11 @@ function App() {
         nextVector[base] = clampedX;
         nextVector[base + 1] = clampedY;
 
-        return { ...file, vector: nextVector };
+        const nextFile = { ...file, vector: nextVector };
+        if (file.check) {
+          nextFile.check = false;
+        }
+        return nextFile;
       }),
     );
   }
@@ -294,6 +298,23 @@ function App() {
     // TODO: dowiedziec sie o co tu chodzi
   }, []);
 
+  const clearCheckForIndex = (imageIndex: number) => {
+    setImageFiles((prevFiles) => {
+      let changed = false;
+      const nextFiles = prevFiles.map((file, idx) => {
+        if (idx !== imageIndex || !file.check) return file;
+        changed = true;
+        return { ...file, check: false };
+      });
+      return changed ? nextFiles : prevFiles;
+    });
+  };
+
+  const handleReviewIndexChange = (nextIndex: number) => {
+    if (nextIndex === reviewIndex) return;
+    setReviewIndex(nextIndex);
+  };
+
   return (
     <>
       <div className="container py-4">
@@ -337,12 +358,13 @@ function App() {
           <ReviewImages
             images={imageFiles}
             index={reviewIndex}
-            onIndexChange={setReviewIndex}
+            onIndexChange={handleReviewIndexChange}
             onUpdatePoint={updatePoint}
             onRename={renameFile}
             onRemove={removeFile}
             onAddFiles={addFilesForReview}
             onReset={resetAll}
+            onClearCheck={clearCheckForIndex}
           />
         )}
       </div>

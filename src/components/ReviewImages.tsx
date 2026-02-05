@@ -5,6 +5,7 @@ type ReviewImagesProps = {
   images: ImageFile[];
   index: number;
   onIndexChange: (index: number) => void;
+  onClearCheck: (index: number) => void;
   onUpdatePoint: (
     imageIndex: number,
     pointIndex: number,
@@ -21,6 +22,7 @@ export default function ReviewImages({
   images,
   index,
   onIndexChange,
+  onClearCheck,
   onUpdatePoint,
   onRename,
   onRemove,
@@ -51,6 +53,29 @@ export default function ReviewImages({
     }
     return result;
   }, [image]);
+
+  const checkIndices = useMemo(() => {
+    return images.reduce<number[]>((acc, item, idx) => {
+      if (item.check) acc.push(idx);
+      return acc;
+    }, []);
+  }, [images]);
+
+  const handleNextCheck = () => {
+    if (images.length === 0 || checkIndices.length === 0) return;
+    if (checkIndices.length === 1) {
+      const nextIndex = index >= images.length - 1 ? 0 : index + 1;
+      onIndexChange(nextIndex);
+      return;
+    }
+    const currentPos = checkIndices.indexOf(index);
+    if (currentPos === -1) {
+      onIndexChange(checkIndices[0]);
+      return;
+    }
+    const nextPos = (currentPos + 1) % checkIndices.length;
+    onIndexChange(checkIndices[nextPos]);
+  };
 
   if (!image) {
     return <div className="text-muted">No images to review.</div>;
@@ -93,6 +118,11 @@ export default function ReviewImages({
   useEffect(() => {
     setRenameValue(image?.filename ?? "");
   }, [image?.filename]);
+
+  useEffect(() => {
+    if (!image?.check) return;
+    onClearCheck(index);
+  }, [image?.check, index, onClearCheck]);
 
   useEffect(() => {
     setZoom(1);
@@ -201,13 +231,14 @@ export default function ReviewImages({
 
   const handleDelete = () => {
     if (!image) return;
+    onClearCheck(index);
     if (images.length <= 1) {
       onReset();
       return;
     }
     const nextIndex = index < images.length - 1 ? index : index - 1;
-    onRemove(image.filename);
     onIndexChange(nextIndex);
+    onRemove(image.filename);
   };
 
   const downloadFile = (filename: string, content: string) => {
@@ -263,6 +294,25 @@ export default function ReviewImages({
 
   return (
     <div className="d-flex flex-column align-items-center gap-3">
+      {checkIndices.length > 0 && (
+        <div className="w-100">
+          <div
+            className="d-flex align-items-center justify-content-between flex-wrap gap-2 border rounded px-3 py-2"
+            style={{ background: "#fff7f7", borderColor: "#f5c2c7" }}
+          >
+            <div className="fw-semibold small">
+              Please check images: {checkIndices.map((idx) => idx + 1).join(", ")}
+            </div>
+            <button
+              type="button"
+              className="btn btn-outline-danger btn-sm"
+              onClick={handleNextCheck}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
       <div className="d-flex align-items-center w-100 gap-3">
         <div className="d-flex align-items-center justify-content-between flex-grow-1">
           <h3 className="mb-0">
@@ -589,6 +639,11 @@ export default function ReviewImages({
                 }`}
                 ref={idx === index ? activeItemRef : null}
                 onClick={() => onIndexChange(idx)}
+                style={{
+                  backgroundImage: item.check
+                    ? "linear-gradient(0deg, rgba(255, 77, 79, 0.12), rgba(255, 77, 79, 0.12))"
+                    : undefined,
+                }}
               >
                 <div className="d-flex align-items-center gap-2">
                   <span
