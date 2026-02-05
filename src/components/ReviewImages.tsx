@@ -52,8 +52,10 @@ export default function ReviewImages({
   const hasVector = image.vector && image.vector.length === 38;
   const canRender = viewWidth > 0 && viewHeight > 0;
   const safeScale = svgScale > 0 ? svgScale : 1;
-  const pointRadius = 6 / safeScale;
-  const pointStroke = 2 / safeScale;
+  const pointRadius = 7 / safeScale;
+  const circleStroke = 1 / safeScale;
+  const crossStroke = 1.5 / safeScale;
+  const crossSize = pointRadius;
   const labelFont = 12 / safeScale;
   const labelOffset = 10 / safeScale;
 
@@ -244,9 +246,9 @@ export default function ReviewImages({
                         cx={point.x}
                         cy={point.y}
                         r={pointRadius}
-                        fill="#ff4d4f"
-                        stroke="#ffffff"
-                        strokeWidth={pointStroke}
+                        fill="rgba(255, 77, 79, 0.2)"
+                        stroke="#ff4d4f"
+                        strokeWidth={circleStroke}
                         onPointerDown={(event) => {
                           event.preventDefault();
                           (event.currentTarget as Element).setPointerCapture(
@@ -259,6 +261,26 @@ export default function ReviewImages({
                         }}
                         style={{ cursor: "grab" }}
                       />
+                      <line
+                        x1={point.x - crossSize}
+                        y1={point.y}
+                        x2={point.x + crossSize}
+                        y2={point.y}
+                        stroke="#ff4d4f"
+                        strokeWidth={crossStroke}
+                        strokeLinecap="round"
+                        pointerEvents="none"
+                      />
+                      <line
+                        x1={point.x}
+                        y1={point.y - crossSize}
+                        x2={point.x}
+                        y2={point.y + crossSize}
+                        stroke="#ff4d4f"
+                        strokeWidth={crossStroke}
+                        strokeLinecap="round"
+                        pointerEvents="none"
+                      />
                       <text
                         x={point.x}
                         y={point.y - labelOffset}
@@ -267,7 +289,7 @@ export default function ReviewImages({
                         fontWeight={600}
                         fill="#212529"
                         stroke="#ffffff"
-                        strokeWidth={pointStroke}
+                        strokeWidth={crossStroke}
                         paintOrder="stroke"
                         pointerEvents="none"
                       >
