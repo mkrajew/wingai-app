@@ -55,6 +55,63 @@ function App() {
     return `${base}.dw.png`;
   };
 
+  const splitFilename = (name: string) => {
+    const trimmed = name.trim();
+    const lower = trimmed.toLowerCase();
+    if (lower.endsWith(".dw.png")) {
+      return { base: trimmed.slice(0, -7), ext: trimmed.slice(-7) };
+    }
+    const lastDot = trimmed.lastIndexOf(".");
+    if (lastDot > 0) {
+      return { base: trimmed.slice(0, lastDot), ext: trimmed.slice(lastDot) };
+    }
+    return { base: trimmed, ext: "" };
+  };
+
+  const ensureUniqueFilenameFromSet = (
+    desiredName: string,
+    used: Set<string>,
+  ) => {
+    const normalized = desiredName.toLowerCase();
+    if (!used.has(normalized)) {
+      used.add(normalized);
+      return desiredName;
+    }
+
+    const { base, ext } = splitFilename(desiredName);
+    const match = base.match(/^(.*)\((\d+)\)$/);
+    let root = base;
+    let counter = 2;
+    if (match) {
+      root = match[1];
+      const parsed = Number(match[2]);
+      if (Number.isFinite(parsed)) {
+        counter = Math.max(2, parsed + 1);
+      }
+    }
+
+    let candidate = `${root}(${counter})${ext}`;
+    while (used.has(candidate.toLowerCase())) {
+      counter += 1;
+      candidate = `${root}(${counter})${ext}`;
+    }
+    used.add(candidate.toLowerCase());
+    return candidate;
+  };
+
+  const ensureUniqueFilename = (
+    desiredName: string,
+    currentIndex: number,
+    files: ImageFile[],
+  ) => {
+    const used = new Set(
+      files
+        .filter((_file, idx) => idx !== currentIndex)
+        .map((file) => file.filename.toLowerCase()),
+    );
+    return ensureUniqueFilenameFromSet(desiredName, used);
+  };
+
   function loadImage(src: string) {
     return new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
@@ -95,35 +152,39 @@ function App() {
   }
 
   function renameFile(index: number, newName: string) {
-    setImageFiles((prevFiles) =>
-      prevFiles.map((file, i) => {
-        if (i !== index) return file;
+    setImageFiles((prevFiles) => {
+      const target = prevFiles[index];
+      if (!target) return prevFiles;
 
-        const trimmed = newName.trim();
-        if (!trimmed) return file;
+      const trimmed = newName.trim();
+      if (!trimmed) return prevFiles;
 
-        const originalName = file.filename;
-        const hasDwPng = /\.dw\.png$/i.test(originalName);
-        const lastDot = originalName.lastIndexOf(".");
-        const originalExt = lastDot > 0 ? originalName.slice(lastDot) : "";
+      const originalName = target.filename;
+      const hasDwPng = /\.dw\.png$/i.test(originalName);
+      const lastDot = originalName.lastIndexOf(".");
+      const originalExt = lastDot > 0 ? originalName.slice(lastDot) : "";
 
-        let base = trimmed;
-        if (hasDwPng) {
-          base = base.replace(/\.dw\.png$/i, "");
-          base = base.replace(/\.[^.]+$/, "");
-        } else if (originalExt.length > 0) {
-          base = base.replace(/\.[^.]+$/, "");
-        }
+      let base = trimmed;
+      if (hasDwPng) {
+        base = base.replace(/\.dw\.png$/i, "");
+        base = base.replace(/\.[^.]+$/, "");
+      } else if (originalExt.length > 0) {
+        base = base.replace(/\.[^.]+$/, "");
+      }
 
-        const finalName = hasDwPng
-          ? `${base}.dw.png`
-          : originalExt.length > 0
-            ? `${base}${originalExt}`
-            : base;
+      const finalName = hasDwPng
+        ? `${base}.dw.png`
+        : originalExt.length > 0
+          ? `${base}${originalExt}`
+          : base;
 
-        return { ...file, filename: finalName };
-      }),
-    );
+      const uniqueName = ensureUniqueFilename(finalName, index, prevFiles);
+      if (uniqueName === target.filename) return prevFiles;
+
+      return prevFiles.map((file, i) =>
+        i === index ? { ...file, filename: uniqueName } : file,
+      );
+    });
   }
 
   function clearFiles() {
@@ -223,14 +284,17 @@ function App() {
     }
   }
 
-  async function processImagesWithBackend(images: ImageFile[]) {
+  async function processImagesWithBackend(
+    images: ImageFile[],
+    existing: ImageFile[] = [],
+  ) {
     // TODO: Replace mock generation with a real backend request.
     if (images.length === 0) return [];
 
     setProcessing({ inProgress: true, completed: 0, total: images.length });
 
     try {
-      return await Promise.all(
+      const processed = await Promise.all(
         images.map(async (image) => {
           try {
             const prepared = await normalizeJpegToPng(image);
@@ -253,6 +317,16 @@ function App() {
           }
         }),
       );
+
+      const used = new Set(
+        existing.map((file) => file.filename.toLowerCase()),
+      );
+      return processed.map((file) => {
+        const uniqueName = ensureUniqueFilenameFromSet(file.filename, used);
+        return uniqueName === file.filename
+          ? file
+          : { ...file, filename: uniqueName };
+      });
     } finally {
       setProcessing((prev) => ({ ...prev, inProgress: false }));
     }
@@ -286,7 +360,7 @@ function App() {
 
     if (newFiles.length === 0) return;
 
-    const processed = await processImagesWithBackend(newFiles);
+    const processed = await processImagesWithBackend(newFiles, imageFiles);
 
     setImageFiles((prevFiles) => [...prevFiles, ...processed]);
   }

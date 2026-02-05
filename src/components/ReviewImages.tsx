@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createZipBlob } from "../utils";
 import type { ImageFile } from "../App";
 
 type ReviewImagesProps = {
@@ -241,8 +242,7 @@ export default function ReviewImages({
     onRemove(image.filename);
   };
 
-  const downloadFile = (filename: string, content: string) => {
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const downloadBlob = (filename: string, blob: Blob) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -253,42 +253,68 @@ export default function ReviewImages({
     URL.revokeObjectURL(url);
   };
 
-  const handleDownload = () => {
+  const downloadText = (
+    filename: string,
+    content: string,
+    type = "text/plain;charset=utf-8",
+  ) => {
+    downloadBlob(filename, new Blob([content], { type }));
+  };
+
+  const buildCsv = () => {
+    const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const headers = [
+      "file",
+      ...Array.from({ length: 19 }, (_, idx) => `x${idx + 1}`),
+      ...Array.from({ length: 19 }, (_, idx) => `y${idx + 1}`),
+    ];
+    const rows: string[] = [headers.map(csvEscape).join(",")];
+    images.forEach((img) => {
+      const vector = img.vector ?? [];
+      const values: string[] = [img.filename];
+      for (let i = 0; i < 19; i += 1) {
+        const x = vector[i * 2];
+        values.push(typeof x === "number" ? Math.round(x).toString() : "");
+      }
+      for (let i = 0; i < 19; i += 1) {
+        const y = vector[i * 2 + 1];
+        values.push(typeof y === "number" ? Math.round(y).toString() : "");
+      }
+      rows.push(values.map((value) => csvEscape(value)).join(","));
+    });
+    return rows.join("\n");
+  };
+
+  const handleDownload = async () => {
     if (!exportMetadata && !exportCsv) return;
+    const csvContent = exportCsv ? buildCsv() : null;
 
     if (exportMetadata) {
-      const payload = images.map((img) => ({
-        filename: img.filename,
-        width: img.width ?? null,
-        height: img.height ?? null,
-        check: img.check ?? null,
-        vector: img.vector ?? [],
-      }));
-      downloadFile("image-metadata.json", JSON.stringify(payload, null, 2));
+      const zipEntries = await Promise.all(
+        images
+          .filter((img) => /\.dw\.png$/i.test(img.filename))
+          .map(async (img) => ({
+            name: img.filename,
+            data: new Uint8Array(await img.file.arrayBuffer()),
+            lastModified: img.file.lastModified,
+          })),
+      );
+
+      if (exportCsv && csvContent !== null) {
+        zipEntries.push({
+          name: "points.csv",
+          data: new TextEncoder().encode(csvContent),
+          lastModified: Date.now(),
+        });
+      }
+
+      const zipBlob = createZipBlob(zipEntries);
+      downloadBlob("image-metadata.zip", zipBlob);
+      return;
     }
 
-    if (exportCsv) {
-      const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
-      const headers = [
-        "file",
-        ...Array.from({ length: 19 }, (_, idx) => `x${idx + 1}`),
-        ...Array.from({ length: 19 }, (_, idx) => `y${idx + 1}`),
-      ];
-      const rows: string[] = [headers.map(csvEscape).join(",")];
-      images.forEach((img) => {
-        const vector = img.vector ?? [];
-        const values: string[] = [img.filename];
-        for (let i = 0; i < 19; i += 1) {
-          const x = vector[i * 2];
-          values.push(typeof x === "number" ? Math.round(x).toString() : "");
-        }
-        for (let i = 0; i < 19; i += 1) {
-          const y = vector[i * 2 + 1];
-          values.push(typeof y === "number" ? Math.round(y).toString() : "");
-        }
-        rows.push(values.map((value) => csvEscape(value)).join(","));
-      });
-      downloadFile("points.csv", rows.join("\n"));
+    if (exportCsv && csvContent !== null) {
+      downloadText("points.csv", csvContent, "text/csv;charset=utf-8");
     }
   };
 
@@ -301,7 +327,8 @@ export default function ReviewImages({
             style={{ background: "#fff7f7", borderColor: "#f5c2c7" }}
           >
             <div className="fw-semibold small">
-              Please check images: {checkIndices.map((idx) => idx + 1).join(", ")}
+              Please check images:{" "}
+              {checkIndices.map((idx) => idx + 1).join(", ")}
             </div>
             <button
               type="button"
@@ -739,7 +766,7 @@ export default function ReviewImages({
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={handleDownload}
+                onClick={() => void handleDownload()}
                 disabled={!exportMetadata && !exportCsv}
               >
                 Download
