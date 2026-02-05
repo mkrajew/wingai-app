@@ -37,6 +37,9 @@ export default function ReviewImages({
   const [zoom, setZoom] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [isGenerateOpen, setIsGenerateOpen] = useState(false);
+  const [exportMetadata, setExportMetadata] = useState(true);
+  const [exportCsv, setExportCsv] = useState(false);
 
   const points = useMemo(() => {
     if (!image?.vector) return [];
@@ -202,6 +205,64 @@ export default function ReviewImages({
     onIndexChange(nextIndex);
   };
 
+  const downloadFile = (filename: string, content: string) => {
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownload = () => {
+    if (!exportMetadata && !exportCsv) return;
+
+    if (exportMetadata) {
+      const payload = images.map((img) => ({
+        filename: img.filename,
+        width: img.width ?? null,
+        height: img.height ?? null,
+        check: img.check ?? null,
+        vector: img.vector ?? [],
+      }));
+      downloadFile(
+        "image-metadata.json",
+        JSON.stringify(payload, null, 2),
+      );
+    }
+
+    if (exportCsv) {
+      const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+      const headers = [
+        "file",
+        ...Array.from({ length: 19 }, (_, idx) => `x${idx + 1}`),
+        ...Array.from({ length: 19 }, (_, idx) => `y${idx + 1}`),
+      ];
+      const rows: string[] = [headers.map(csvEscape).join(",")];
+      images.forEach((img) => {
+        const vector = img.vector ?? [];
+        const values: string[] = [img.filename];
+        for (let i = 0; i < 19; i += 1) {
+          const x = vector[i * 2];
+          values.push(
+            typeof x === "number" ? Math.round(x).toString() : "",
+          );
+        }
+        for (let i = 0; i < 19; i += 1) {
+          const y = vector[i * 2 + 1];
+          values.push(
+            typeof y === "number" ? Math.round(y).toString() : "",
+          );
+        }
+        rows.push(values.map((value) => csvEscape(value)).join(","));
+      });
+      downloadFile("points.csv", rows.join("\n"));
+    }
+  };
+
   return (
     <div className="d-flex flex-column align-items-center gap-3">
       <div className="d-flex align-items-center w-100 gap-3">
@@ -210,6 +271,13 @@ export default function ReviewImages({
             Image {index + 1} of {images.length}
           </h3>
           <div className="d-flex align-items-center gap-2">
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm"
+              onClick={() => setIsGenerateOpen(true)}
+            >
+              Generate data
+            </button>
             <button
               type="button"
               className="btn btn-outline-secondary btn-sm"
@@ -531,6 +599,95 @@ export default function ReviewImages({
           </div>
         </div>
       </div>
+
+      {isGenerateOpen && (
+        <div
+          role="presentation"
+          onClick={() => setIsGenerateOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+            padding: "1rem",
+          }}
+        >
+          <div
+            role="dialog"
+            aria-label="Generate data"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "min(90vw, 420px)",
+              background: "#fff",
+              borderRadius: "10px",
+              padding: "1rem",
+              boxShadow: "0 10px 30px rgba(0, 0, 0, 0.2)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.75rem",
+            }}
+          >
+            <div className="d-flex align-items-center justify-content-between">
+              <h4 className="mb-0">Generate data</h4>
+              <button
+                type="button"
+                className="btn btn-close"
+                aria-label="Close"
+                onClick={() => setIsGenerateOpen(false)}
+              />
+            </div>
+            <div className="d-flex flex-column gap-2">
+              <label className="form-check d-flex align-items-center gap-2">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  checked={exportMetadata}
+                  onChange={(event) =>
+                    setExportMetadata(event.currentTarget.checked)
+                  }
+                />
+                <span className="form-check-label">Image metadata</span>
+              </label>
+              <label className="form-check d-flex align-items-center gap-2">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  checked={exportCsv}
+                  onChange={(event) =>
+                    setExportCsv(event.currentTarget.checked)
+                  }
+                />
+                <span className="form-check-label">CSV</span>
+              </label>
+              {!exportMetadata && !exportCsv && (
+                <div className="text-danger small">
+                  Select at least one option.
+                </div>
+              )}
+            </div>
+            <div className="d-flex justify-content-end gap-2">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={() => setIsGenerateOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleDownload}
+                disabled={!exportMetadata && !exportCsv}
+              >
+                Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
