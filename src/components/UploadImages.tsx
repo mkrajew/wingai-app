@@ -12,6 +12,7 @@ type UploadImagesProps = {
   removeFile: (filename: string) => void;
   clearFiles: () => void;
   renameFile: (index: number, newName: string) => void;
+  onProcess: () => void;
 };
 function UploadImages({
   images,
@@ -19,19 +20,16 @@ function UploadImages({
   removeFile,
   clearFiles,
   renameFile,
+  onProcess,
 }: UploadImagesProps) {
-  const [previewImage, setPreviewImage] = useState<ImageFile | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (previewIndex === null) return;
     if (previewIndex >= images.length) {
       setPreviewIndex(null);
-      setPreviewImage(null);
-      return;
     }
-    setPreviewImage(images[previewIndex] ?? null);
-  }, [images, previewIndex]);
+  }, [images.length, previewIndex]);
 
   return (
     <>
@@ -40,13 +38,12 @@ function UploadImages({
         images={images}
         removeFile={removeFile}
         clearFiles={clearFiles}
-        onSelectImage={(image, index) => {
-          setPreviewImage(image);
+        onProcess={onProcess}
+        onSelectImage={(_image, index) => {
           setPreviewIndex(index);
         }}
         onPreviewFirst={() => {
           if (images.length === 0) return;
-          setPreviewImage(images[0]);
           setPreviewIndex(0);
         }}
       />
@@ -55,10 +52,8 @@ function UploadImages({
         previewIndex={previewIndex}
         onPreviewIndexChange={(index) => {
           setPreviewIndex(index);
-          setPreviewImage(index === null ? null : images[index] ?? null);
         }}
         onClose={() => {
-          setPreviewImage(null);
           setPreviewIndex(null);
         }}
         onRemove={removeFile}
@@ -121,6 +116,7 @@ type ImageListProps = {
   images: ImageFile[];
   removeFile: (filename: string) => void;
   clearFiles: () => void;
+  onProcess: () => void;
   onSelectImage: (image: ImageFile, index: number) => void;
   onPreviewFirst: () => void;
 };
@@ -128,6 +124,7 @@ function ImageList({
   images,
   removeFile,
   clearFiles,
+  onProcess,
   onSelectImage,
   onPreviewFirst,
 }: ImageListProps) {
@@ -139,9 +136,9 @@ function ImageList({
           Uploaded {images.length} {images.length === 1 ? "image" : "images"}:
         </h3>
         <div className="d-flex align-items-center gap-2">
-          <button type="button" className="btn btn-primary">
-            Process
-          </button>
+        <button type="button" className="btn btn-primary" onClick={onProcess}>
+          Process
+        </button>
           <button
             type="button"
             className="btn btn-outline-secondary"
