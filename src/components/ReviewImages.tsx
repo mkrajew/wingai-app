@@ -32,6 +32,7 @@ export default function ReviewImages({
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const activeItemRef = useRef<HTMLButtonElement | null>(null);
+  const [svgScale, setSvgScale] = useState(1);
 
   const points = useMemo(() => {
     if (!image?.vector) return [];
@@ -50,6 +51,11 @@ export default function ReviewImages({
   const viewHeight = image.height ?? 0;
   const hasVector = image.vector && image.vector.length === 38;
   const canRender = viewWidth > 0 && viewHeight > 0;
+  const safeScale = svgScale > 0 ? svgScale : 1;
+  const pointRadius = 6 / safeScale;
+  const pointStroke = 2 / safeScale;
+  const labelFont = 12 / safeScale;
+  const labelOffset = 10 / safeScale;
 
   const toSvgPoint = (event: React.PointerEvent<SVGElement>) => {
     const svg = svgRef.current;
@@ -70,6 +76,20 @@ export default function ReviewImages({
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: "nearest" });
   }, [index]);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || !canRender) return;
+    const updateScale = () => {
+      const rect = svg.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      setSvgScale(Math.min(rect.width / viewWidth, rect.height / viewHeight));
+    };
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(svg);
+    return () => observer.disconnect();
+  }, [canRender, viewWidth, viewHeight]);
 
   const commitRename = () => {
     if (!image) return;
@@ -223,10 +243,10 @@ export default function ReviewImages({
                       <circle
                         cx={point.x}
                         cy={point.y}
-                        r={6}
+                        r={pointRadius}
                         fill="#ff4d4f"
                         stroke="#ffffff"
-                        strokeWidth={2}
+                        strokeWidth={pointStroke}
                         onPointerDown={(event) => {
                           event.preventDefault();
                           (event.currentTarget as Element).setPointerCapture(
@@ -241,13 +261,13 @@ export default function ReviewImages({
                       />
                       <text
                         x={point.x}
-                        y={point.y - 10}
+                        y={point.y - labelOffset}
                         textAnchor="middle"
-                        fontSize={12}
+                        fontSize={labelFont}
                         fontWeight={600}
                         fill="#212529"
                         stroke="#ffffff"
-                        strokeWidth={2}
+                        strokeWidth={pointStroke}
                         paintOrder="stroke"
                         pointerEvents="none"
                       >
