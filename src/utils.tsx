@@ -12,6 +12,9 @@ type ZipEntry = {
   lastModified?: number;
 };
 
+const textEncoder = new TextEncoder();
+const PNG_SIGNATURE = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+
 const crcTable = (() => {
   const table = new Uint32Array(256);
   for (let n = 0; n < 256; n += 1) {
@@ -32,6 +35,13 @@ const crc32 = (data: Uint8Array) => {
   return (crc ^ -1) >>> 0;
 };
 
+const readUint32BE = (data: Uint8Array, offset: number) =>
+  ((data[offset] << 24) |
+    (data[offset + 1] << 16) |
+    (data[offset + 2] << 8) |
+    data[offset + 3]) >>>
+  0;
+
 const toDosDateTime = (timestamp?: number) => {
   const date = new Date(timestamp ?? Date.now());
   const year = Math.max(1980, date.getFullYear());
@@ -46,14 +56,13 @@ const toDosDateTime = (timestamp?: number) => {
 };
 
 export function createZipBlob(entries: ZipEntry[]) {
-  const encoder = new TextEncoder();
   const flags = 0x0800;
   const fileParts: Uint8Array[] = [];
   const centralParts: Uint8Array[] = [];
   let offset = 0;
 
   entries.forEach((entry) => {
-    const nameBytes = encoder.encode(entry.name.replace(/\\/g, "/"));
+    const nameBytes = textEncoder.encode(entry.name.replace(/\\/g, "/"));
     const data = entry.data;
     const { dosTime, dosDate } = toDosDateTime(entry.lastModified);
     const crc = crc32(data);
@@ -114,7 +123,63 @@ export function createZipBlob(entries: ZipEntry[]) {
   endView.setUint32(16, centralOffset, true);
   endView.setUint16(20, 0, true);
 
-  return new Blob([...fileParts, ...centralParts, endRecord], {
+  const blobParts = [...fileParts, ...centralParts, endRecord] as unknown as BlobPart[];
+  return new Blob(blobParts, {
     type: "application/zip",
   });
+}
+
+export function addPngTextChunk(
+  pngData: Uint8Array,
+  keyword: string,
+  text: string,
+) {
+  if (pngData.length < PNG_SIGNATURE.length) return pngData;
+  for (let i = 0; i < PNG_SIGNATURE.length; i += 1) {
+    if (pngData[i] !== PNG_SIGNATURE[i]) return pngData;
+  }
+
+  const keywordBytes = textEncoder.encode(keyword);
+  const textBytes = textEncoder.encode(text);
+  const chunkData = new Uint8Array(keywordBytes.length + 1 + textBytes.length);
+  chunkData.set(keywordBytes, 0);
+  chunkData[keywordBytes.length] = 0;
+  chunkData.set(textBytes, keywordBytes.length + 1);
+
+  const chunk = new Uint8Array(12 + chunkData.length);
+  const chunkView = new DataView(chunk.buffer);
+  chunkView.setUint32(0, chunkData.length, false);
+  chunk.set([0x74, 0x45, 0x58, 0x74], 4);
+  chunk.set(chunkData, 8);
+  const crc = crc32(chunk.subarray(4, 8 + chunkData.length));
+  chunkView.setUint32(8 + chunkData.length, crc, false);
+
+  let insertOffset = -1;
+  let offset = 8;
+  while (offset + 8 <= pngData.length) {
+    const length = readUint32BE(pngData, offset);
+    const type = String.fromCharCode(
+      pngData[offset + 4],
+      pngData[offset + 5],
+      pngData[offset + 6],
+      pngData[offset + 7],
+    );
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    const crcEnd = dataEnd + 4;
+    if (crcEnd > pngData.length) break;
+    if (type === "IEND") {
+      insertOffset = offset;
+      break;
+    }
+    offset = crcEnd;
+  }
+
+  if (insertOffset === -1) return pngData;
+
+  const output = new Uint8Array(pngData.length + chunk.length);
+  output.set(pngData.subarray(0, insertOffset), 0);
+  output.set(chunk, insertOffset);
+  output.set(pngData.subarray(insertOffset), insertOffset + chunk.length);
+  return output;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createZipBlob } from "../utils";
+import { addPngTextChunk, createZipBlob } from "../utils";
 import type { ImageFile } from "../App";
 
 type ReviewImagesProps = {
@@ -17,6 +17,7 @@ type ReviewImagesProps = {
   onRemove: (filename: string) => void;
   onAddFiles: (files: File[]) => void;
   onReset: () => void;
+  onDownloadNotice: () => void;
 };
 
 export default function ReviewImages({
@@ -29,6 +30,7 @@ export default function ReviewImages({
   onRemove,
   onAddFiles,
   onReset,
+  onDownloadNotice,
 }: ReviewImagesProps) {
   const image = images[index];
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -261,6 +263,19 @@ export default function ReviewImages({
     downloadBlob(filename, new Blob([content], { type }));
   };
 
+  const buildLandmarksMetadata = (img: ImageFile) => {
+    const vector = img.vector ?? [];
+    const values: number[] = [];
+    for (let i = 0; i < vector.length; i += 2) {
+      const rawX = vector[i];
+      const rawY = vector[i + 1];
+      const x = Number.isFinite(rawX) ? Math.trunc(rawX) : 0;
+      const y = Number.isFinite(rawY) ? Math.trunc(rawY) : 0;
+      values.push(x, y);
+    }
+    return `landmarks:${values.join(" ")};`;
+  };
+
   const buildCsv = () => {
     const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
     const headers = [
@@ -287,6 +302,8 @@ export default function ReviewImages({
 
   const handleDownload = async () => {
     if (!exportMetadata && !exportCsv) return;
+    setIsGenerateOpen(false);
+    onDownloadNotice();
     const csvContent = exportCsv ? buildCsv() : null;
 
     if (exportMetadata) {
@@ -295,7 +312,11 @@ export default function ReviewImages({
           .filter((img) => /\.dw\.png$/i.test(img.filename))
           .map(async (img) => ({
             name: img.filename,
-            data: new Uint8Array(await img.file.arrayBuffer()),
+            data: addPngTextChunk(
+              new Uint8Array(await img.file.arrayBuffer()),
+              "IdentiFly",
+              buildLandmarksMetadata(img),
+            ),
             lastModified: img.file.lastModified,
           })),
       );

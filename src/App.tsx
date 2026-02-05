@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import UploadImages from "./components/UploadImages";
 import ReviewImages from "./components/ReviewImages";
 
@@ -20,6 +20,8 @@ function App() {
   const [imageFiles, setImageFiles] = useState<ImageFile[]>([]);
   const [step, setStep] = useState<"upload" | "review">("upload");
   const [reviewIndex, setReviewIndex] = useState(0);
+  const [showDownloadNotice, setShowDownloadNotice] = useState(false);
+  const downloadNoticeTimeout = useRef<number | null>(null);
   const [processing, setProcessing] = useState({
     inProgress: false,
     completed: 0,
@@ -372,6 +374,14 @@ function App() {
     // TODO: dowiedziec sie o co tu chodzi
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (downloadNoticeTimeout.current !== null) {
+        window.clearTimeout(downloadNoticeTimeout.current);
+      }
+    };
+  }, []);
+
   const clearCheckForIndex = (imageIndex: number) => {
     setImageFiles((prevFiles) => {
       let changed = false;
@@ -389,10 +399,40 @@ function App() {
     setReviewIndex(nextIndex);
   };
 
+  const triggerDownloadNotice = () => {
+    setShowDownloadNotice(true);
+    if (downloadNoticeTimeout.current !== null) {
+      window.clearTimeout(downloadNoticeTimeout.current);
+    }
+    downloadNoticeTimeout.current = window.setTimeout(() => {
+      setShowDownloadNotice(false);
+      downloadNoticeTimeout.current = null;
+    }, 2500);
+  };
+
   return (
     <>
       <div className="container py-4">
-        <h2 className="mb-3">WingAI</h2>
+        <div
+          className="mb-3"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "auto 1fr",
+            alignItems: "center",
+            columnGap: "0.75rem",
+          }}
+        >
+          <h2 className="mb-0">WingAI</h2>
+          {showDownloadNotice && (
+            <div
+              className="alert alert-success py-2 px-3 mb-0 small"
+              role="status"
+              style={{ justifySelf: "center" }}
+            >
+              Download in progress...
+            </div>
+          )}
+        </div>
         {processing.inProgress && processing.total > 0 && (
           <div className="mb-3">
             <div className="small text-muted mb-1">
@@ -439,6 +479,7 @@ function App() {
             onAddFiles={addFilesForReview}
             onReset={resetAll}
             onClearCheck={clearCheckForIndex}
+            onDownloadNotice={triggerDownloadNotice}
           />
         )}
       </div>
