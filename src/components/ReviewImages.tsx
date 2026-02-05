@@ -14,6 +14,7 @@ type ReviewImagesProps = {
   onRename: (imageIndex: number, newName: string) => void;
   onRemove: (filename: string) => void;
   onAddFiles: (files: File[]) => void;
+  onReset: () => void;
 };
 
 export default function ReviewImages({
@@ -24,6 +25,7 @@ export default function ReviewImages({
   onRename,
   onRemove,
   onAddFiles,
+  onReset,
 }: ReviewImagesProps) {
   const image = images[index];
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -284,6 +286,13 @@ export default function ReviewImages({
               onClick={() => fileInputRef.current?.click()}
             >
               Add files
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm"
+              onClick={onReset}
+            >
+              Reset
             </button>
             <button
               type="button"

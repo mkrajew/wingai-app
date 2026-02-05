@@ -88,6 +88,15 @@ function App() {
     setImageFiles([]);
   }
 
+  function resetAll() {
+    setImageFiles((prevFiles) => {
+      prevFiles.forEach((it) => URL.revokeObjectURL(it.previewUrl));
+      return [];
+    });
+    setStep("upload");
+    setReviewIndex(0);
+  }
+
   function updatePoint(
     imageIndex: number,
     pointIndex: number,
@@ -204,6 +213,7 @@ function App() {
             onRename={renameFile}
             onRemove={removeFile}
             onAddFiles={addFilesForReview}
+            onReset={resetAll}
           />
         )}
       </div>
