@@ -31,6 +31,7 @@ export default function ReviewImages({
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const activeItemRef = useRef<HTMLButtonElement | null>(null);
 
   const points = useMemo(() => {
     if (!image?.vector) return [];
@@ -65,6 +66,10 @@ export default function ReviewImages({
   useEffect(() => {
     setRenameValue(image?.filename ?? "");
   }, [image?.filename]);
+
+  useEffect(() => {
+    activeItemRef.current?.scrollIntoView({ block: "nearest" });
+  }, [index]);
 
   const commitRename = () => {
     if (!image) return;
@@ -359,6 +364,7 @@ export default function ReviewImages({
                 className={`list-group-item list-group-item-action ${
                   idx === index ? "active" : ""
                 }`}
+                ref={idx === index ? activeItemRef : null}
                 onClick={() => onIndexChange(idx)}
               >
                 <div className="d-flex align-items-center gap-2">
