@@ -482,6 +482,9 @@ function App() {
             onDownloadNotice={triggerDownloadNotice}
           />
         )}
+        <footer className="mt-4 text-center text-muted small">
+          © {new Date().getFullYear()} Mateusz Krajewski
+        </footer>
       </div>
     </>
   );
