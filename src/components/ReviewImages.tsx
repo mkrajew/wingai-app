@@ -123,7 +123,7 @@ export default function ReviewImages({
 
   useEffect(() => {
     const svg = svgRef.current;
-    if (!svg) return;
+    if (!svg || !canRender) return;
     const handleWheel = (event: WheelEvent) => {
       if (!event.ctrlKey) return;
       event.preventDefault();
@@ -132,7 +132,7 @@ export default function ReviewImages({
     };
     svg.addEventListener("wheel", handleWheel, { passive: false });
     return () => svg.removeEventListener("wheel", handleWheel);
-  }, []);
+  }, [canRender]);
 
   useEffect(() => {
     setPanOffset((prev) => {
@@ -201,8 +201,11 @@ export default function ReviewImages({
 
   const handleDelete = () => {
     if (!image) return;
-    const nextIndex =
-      images.length <= 1 ? 0 : index < images.length - 1 ? index : index - 1;
+    if (images.length <= 1) {
+      onReset();
+      return;
+    }
+    const nextIndex = index < images.length - 1 ? index : index - 1;
     onRemove(image.filename);
     onIndexChange(nextIndex);
   };
@@ -230,10 +233,7 @@ export default function ReviewImages({
         check: img.check ?? null,
         vector: img.vector ?? [],
       }));
-      downloadFile(
-        "image-metadata.json",
-        JSON.stringify(payload, null, 2),
-      );
+      downloadFile("image-metadata.json", JSON.stringify(payload, null, 2));
     }
 
     if (exportCsv) {
@@ -249,15 +249,11 @@ export default function ReviewImages({
         const values: string[] = [img.filename];
         for (let i = 0; i < 19; i += 1) {
           const x = vector[i * 2];
-          values.push(
-            typeof x === "number" ? Math.round(x).toString() : "",
-          );
+          values.push(typeof x === "number" ? Math.round(x).toString() : "");
         }
         for (let i = 0; i < 19; i += 1) {
           const y = vector[i * 2 + 1];
-          values.push(
-            typeof y === "number" ? Math.round(y).toString() : "",
-          );
+          values.push(typeof y === "number" ? Math.round(y).toString() : "");
         }
         rows.push(values.map((value) => csvEscape(value)).join(","));
       });
