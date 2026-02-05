@@ -21,17 +21,24 @@ function App() {
   const [step, setStep] = useState<"upload" | "review">("upload");
   const [reviewIndex, setReviewIndex] = useState(0);
 
+  const fileKey = (file: File) =>
+    `${file.name}|${file.size}|${file.lastModified}`;
+
+  const createVector = (width: number, height: number) =>
+    Array.from({ length: 38 }, (_, index) => {
+      const isX = index % 2 === 0;
+      return isX
+        ? Math.floor(Math.random() * width)
+        : Math.floor(Math.random() * height);
+    });
+
   const addFiles = (files: File[]) => {
     setImageFiles((prevFiles) => {
-      const existingKeys = new Set(
-        prevFiles.map(
-          (f) => `${f.file.name}|${f.file.size}|${f.file.lastModified}`,
-        ),
-      );
+      const existingKeys = new Set(prevFiles.map((f) => fileKey(f.file)));
 
       const newFiles: ImageFile[] = [];
       for (const file of files) {
-        const key = `${file.name}|${file.size}|${file.lastModified}`;
+        const key = fileKey(file);
         if (existingKeys.has(key)) continue;
         existingKeys.add(key);
         newFiles.push({
@@ -118,30 +125,53 @@ function App() {
     });
   }
 
-  async function processImages() {
-    setStep("review");
-    setReviewIndex(0);
-
-    const updated = await Promise.all(
-      imageFiles.map(async (image) => {
+  async function attachBackendResults(images: ImageFile[]) {
+    // TODO: Replace mock generation with a real backend request.
+    return Promise.all(
+      images.map(async (image) => {
         const { width, height } = await loadImageDimensions(image.previewUrl);
-        const vector = Array.from({ length: 38 }, (_, index) => {
-          const isX = index % 2 === 0;
-          return isX
-            ? Math.floor(Math.random() * width)
-            : Math.floor(Math.random() * height);
-        });
         return {
           ...image,
-          vector,
+          vector: createVector(width, height),
           check: Math.random() < 0.5,
           width,
           height,
         };
       }),
     );
+  }
+
+  async function processImages() {
+    setStep("review");
+    setReviewIndex(0);
+
+    const updated = await attachBackendResults(imageFiles);
 
     setImageFiles(updated);
+  }
+
+  async function addFilesForReview(files: File[]) {
+    if (files.length === 0) return;
+    const existingKeys = new Set(imageFiles.map((f) => fileKey(f.file)));
+    const newFiles: ImageFile[] = [];
+
+    for (const file of files) {
+      const key = fileKey(file);
+      if (existingKeys.has(key)) continue;
+      existingKeys.add(key);
+      newFiles.push({
+        filename: file.name,
+        file: file,
+        previewUrl: URL.createObjectURL(file),
+        status: "new",
+      });
+    }
+
+    if (newFiles.length === 0) return;
+
+    const processed = await attachBackendResults(newFiles);
+
+    setImageFiles((prevFiles) => [...prevFiles, ...processed]);
   }
 
   useEffect(() => {
@@ -172,6 +202,8 @@ function App() {
             onIndexChange={setReviewIndex}
             onUpdatePoint={updatePoint}
             onRename={renameFile}
+            onRemove={removeFile}
+            onAddFiles={addFilesForReview}
           />
         )}
       </div>
