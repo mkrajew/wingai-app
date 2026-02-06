@@ -5,6 +5,7 @@ import type { ImageFile } from "../App";
 type ReviewImagesProps = {
   images: ImageFile[];
   index: number;
+  isProcessing: boolean;
   onIndexChange: (index: number) => void;
   onClearCheck: (index: number) => void;
   onUpdatePoint: (
@@ -23,6 +24,7 @@ type ReviewImagesProps = {
 export default function ReviewImages({
   images,
   index,
+  isProcessing,
   onIndexChange,
   onClearCheck,
   onUpdatePoint,
@@ -47,6 +49,7 @@ export default function ReviewImages({
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
   const [exportMetadata, setExportMetadata] = useState(true);
   const [exportCsv, setExportCsv] = useState(false);
+  const disableActions = isProcessing;
   const handleToggleMetadata = (checked: boolean) => {
     if (checked) {
       setExportMetadata(true);
@@ -397,6 +400,7 @@ export default function ReviewImages({
               type="button"
               className="btn btn-outline-secondary btn-sm"
               onClick={() => setIsGenerateOpen(true)}
+              disabled={disableActions}
             >
               Generate data
             </button>
@@ -404,6 +408,7 @@ export default function ReviewImages({
               type="button"
               className="btn btn-outline-secondary btn-sm"
               onClick={() => fileInputRef.current?.click()}
+              disabled={disableActions}
             >
               Add files
             </button>
@@ -427,10 +432,12 @@ export default function ReviewImages({
               accept="image/png,image/jpeg"
               multiple
               onChange={(event) => {
+                if (disableActions) return;
                 const selected = Array.from(event.currentTarget.files ?? []);
                 if (selected.length > 0) onAddFiles(selected);
                 event.currentTarget.value = "";
               }}
+              disabled={disableActions}
               style={{ display: "none" }}
             />
           </div>
@@ -819,7 +826,7 @@ export default function ReviewImages({
                 type="button"
                 className="btn btn-primary"
                 onClick={() => void handleDownload()}
-                disabled={!exportMetadata && !exportCsv}
+                disabled={disableActions || (!exportMetadata && !exportCsv)}
               >
                 Download
               </button>

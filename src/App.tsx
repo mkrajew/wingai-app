@@ -527,6 +527,7 @@ function App() {
           <ReviewImages
             images={imageFiles}
             index={reviewIndex}
+            isProcessing={processing.inProgress}
             onIndexChange={handleReviewIndexChange}
             onUpdatePoint={updatePoint}
             onRename={renameFile}
