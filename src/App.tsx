@@ -31,14 +31,6 @@ function App() {
   const fileKey = (file: File) =>
     `${file.name}|${file.size}|${file.lastModified}`;
 
-  const createVector = (width: number, height: number) =>
-    Array.from({ length: 38 }, (_, index) => {
-      const isX = index % 2 === 0;
-      return isX
-        ? Math.floor(Math.random() * width)
-        : Math.floor(Math.random() * height);
-    });
-
   const isJpegFile = (file: File) =>
     file.type === "image/jpeg" || /\.jpe?g$/i.test(file.name);
 
@@ -286,28 +278,93 @@ function App() {
     }
   }
 
+  async function analyzeImageWithBackend(
+    image: ImageFile,
+    width: number,
+    height: number,
+  ) {
+    const formData = new FormData();
+    formData.append("file", image.file, image.filename);
+    formData.append("x_size", String(width));
+    formData.append("y_size", String(height));
+
+    const response = await fetch("http://localhost:8000/analyze", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Backend error: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    const data = (await response.json()) as {
+      coords?: unknown;
+      check?: unknown;
+    };
+    const coords = Array.isArray(data.coords)
+      ? data.coords.map((value) => Number(value))
+      : [];
+    const validCoords =
+      coords.length === 38 && coords.every((value) => Number.isFinite(value));
+    if (!validCoords) {
+      throw new Error("Invalid coords from backend.");
+    }
+
+    let check = false;
+    if (typeof data.check === "boolean") {
+      check = data.check;
+    } else if (typeof data.check === "string") {
+      check = data.check.toLowerCase() === "true";
+    } else {
+      check = Boolean(data.check);
+    }
+
+    return { coords, check };
+  }
+
   async function processImagesWithBackend(
     images: ImageFile[],
     existing: ImageFile[] = [],
   ) {
-    // TODO: Replace mock generation with a real backend request.
     if (images.length === 0) return [];
 
     setProcessing({ inProgress: true, completed: 0, total: images.length });
 
     try {
       const processed = await Promise.all(
-        images.map(async (image) => {
+        images.map(async (image): Promise<ImageFile> => {
+          let prepared = image;
+          let width = image.width;
+          let height = image.height;
           try {
-            const prepared = await normalizeJpegToPng(image);
-            const { width, height } = await loadImageDimensions(
-              prepared.previewUrl,
+            prepared = await normalizeJpegToPng(image);
+            const dimensions = await loadImageDimensions(prepared.previewUrl);
+            width = dimensions.width;
+            height = dimensions.height;
+            const analysis = await analyzeImageWithBackend(
+              prepared,
+              width,
+              height,
             );
             return {
               ...prepared,
               filename: toDwPngFilename(prepared.filename),
-              vector: createVector(width, height),
-              check: Math.random() < 0.5,
+              vector: analysis.coords,
+              check: analysis.check,
+              status: "done",
+              width,
+              height,
+            };
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : "Unknown error";
+            console.error("Backend analysis failed.", image.filename, error);
+            return {
+              ...prepared,
+              status: "error",
+              error: message,
               width,
               height,
             };

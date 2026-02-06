@@ -622,7 +622,12 @@ export default function ReviewImages({
               : "Dimensions: ..."}
           </div>
 
-          {!hasVector && <div className="text-muted">Processing points...</div>}
+          {!hasVector && !image.error && (
+            <div className="text-muted">Processing points...</div>
+          )}
+          {image.error && (
+            <div className="text-danger small">Error: {image.error}</div>
+          )}
 
           {hasVector && (
             <div className="w-100">
