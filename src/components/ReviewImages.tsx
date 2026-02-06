@@ -277,22 +277,28 @@ export default function ReviewImages({
 
   const buildCsv = () => {
     const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
-    const headers = [
-      "file",
-      ...Array.from({ length: 19 }, (_, idx) => `x${idx + 1}`),
-      ...Array.from({ length: 19 }, (_, idx) => `y${idx + 1}`),
-    ];
-    const rows: string[] = [headers.map(csvEscape).join(",")];
+    const interleavedHeaders = ["file"];
+    for (let i = 0; i < 19; i += 1) {
+      interleavedHeaders.push(`x${i + 1}`, `y${i + 1}`);
+    }
+    const rows: string[] = [interleavedHeaders.map(csvEscape).join(",")];
     images.forEach((img) => {
       const vector = img.vector ?? [];
+      const ySize =
+        typeof img.height === "number" && Number.isFinite(img.height)
+          ? img.height
+          : null;
       const values: string[] = [img.filename];
       for (let i = 0; i < 19; i += 1) {
         const x = vector[i * 2];
-        values.push(typeof x === "number" ? Math.round(x).toString() : "");
-      }
-      for (let i = 0; i < 19; i += 1) {
         const y = vector[i * 2 + 1];
-        values.push(typeof y === "number" ? Math.round(y).toString() : "");
+        values.push(Number.isFinite(x) ? x.toString() : "");
+        if (!Number.isFinite(y)) {
+          values.push("");
+          continue;
+        }
+        const flippedY = ySize !== null && ySize > 0 ? ySize - y - 2 : y;
+        values.push(flippedY.toString());
       }
       rows.push(values.map((value) => csvEscape(value)).join(","));
     });
