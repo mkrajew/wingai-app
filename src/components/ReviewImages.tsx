@@ -47,6 +47,27 @@ export default function ReviewImages({
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
   const [exportMetadata, setExportMetadata] = useState(true);
   const [exportCsv, setExportCsv] = useState(false);
+  const handleToggleMetadata = (checked: boolean) => {
+    if (checked) {
+      setExportMetadata(true);
+      return;
+    }
+    if (!exportCsv) {
+      setExportCsv(true);
+    }
+    setExportMetadata(false);
+  };
+
+  const handleToggleCsv = (checked: boolean) => {
+    if (checked) {
+      setExportCsv(true);
+      return;
+    }
+    if (!exportMetadata) {
+      setExportMetadata(true);
+    }
+    setExportCsv(false);
+  };
 
   const points = useMemo(() => {
     if (!image?.vector) return [];
@@ -764,7 +785,7 @@ export default function ReviewImages({
                   type="checkbox"
                   checked={exportMetadata}
                   onChange={(event) =>
-                    setExportMetadata(event.currentTarget.checked)
+                    handleToggleMetadata(event.currentTarget.checked)
                   }
                 />
                 <span className="form-check-label">Image metadata</span>
@@ -775,7 +796,7 @@ export default function ReviewImages({
                   type="checkbox"
                   checked={exportCsv}
                   onChange={(event) =>
-                    setExportCsv(event.currentTarget.checked)
+                    handleToggleCsv(event.currentTarget.checked)
                   }
                 />
                 <span className="form-check-label">CSV</span>
