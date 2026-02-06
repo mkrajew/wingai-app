@@ -67,8 +67,7 @@ export default function ReviewImages({
   const handleNextCheck = () => {
     if (images.length === 0 || checkIndices.length === 0) return;
     if (checkIndices.length === 1) {
-      const nextIndex = index >= images.length - 1 ? 0 : index + 1;
-      onIndexChange(nextIndex);
+      onIndexChange(checkIndices[0]);
       return;
     }
     const currentPos = checkIndices.indexOf(index);
