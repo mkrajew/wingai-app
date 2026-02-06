@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 import torch
 from contextlib import asynccontextmanager
@@ -50,6 +51,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+origins = [
+    "http://localhost:5173",
+    "https://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
@@ -66,10 +81,13 @@ def process_image(image, x_size, y_size):
 
     mask_coords = final_coords(mask, x_size, y_size)
     mask_coords = torch.tensor(mask_coords)
+    check_carefully = len(mask_coords) < 19 or len(mask_coords) > 22
 
-    coordinates = handle_coordinates(mask_coords, models["shape"]).detach().tolist()
+    coordinates = handle_coordinates(mask_coords, models["shape"])
+    coordinates[:, 1] = y_size - coordinates[:, 1] - 1
+    coordinates = coordinates.detach().flatten().long().tolist()
 
-    return coordinates
+    return coordinates, check_carefully
 
 
 @app.post("/analyze")
@@ -79,5 +97,5 @@ async def analyze(
     raw = await file.read()
     encoded = torch.frombuffer(raw, dtype=torch.uint8)
 
-    coords = process_image(encoded, x_size, y_size)
-    return JSONResponse(content={"coords": coords})
+    coords, check = process_image(encoded, x_size, y_size)
+    return JSONResponse(content={"coords": coords, "check": check})
