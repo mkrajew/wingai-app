@@ -320,9 +320,7 @@ function App() {
         }),
       );
 
-      const used = new Set(
-        existing.map((file) => file.filename.toLowerCase()),
-      );
+      const used = new Set(existing.map((file) => file.filename.toLowerCase()));
       return processed.map((file) => {
         const uniqueName = ensureUniqueFilenameFromSet(file.filename, used);
         return uniqueName === file.filename

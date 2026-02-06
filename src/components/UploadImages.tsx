@@ -23,6 +23,16 @@ function UploadImages({
   onProcess,
 }: UploadImagesProps) {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [filterText, setFilterText] = useState("");
+
+  const normalizedFilter = filterText.trim().toLowerCase();
+  const filteredEntries = images
+    .map((image, index) => ({ image, index }))
+    .filter(({ image }) =>
+      normalizedFilter.length === 0
+        ? true
+        : image.filename.toLowerCase().includes(normalizedFilter),
+    );
 
   useEffect(() => {
     if (previewIndex === null) return;
@@ -35,16 +45,19 @@ function UploadImages({
     <>
       <DropZoneArea addFiles={addFiles} />
       <ImageList
-        images={images}
+        entries={filteredEntries}
+        totalCount={images.length}
+        filterText={filterText}
+        onFilterChange={setFilterText}
         removeFile={removeFile}
         clearFiles={clearFiles}
         onProcess={onProcess}
-        onSelectImage={(_image, index) => {
-          setPreviewIndex(index);
+        onSelectImage={(_image, originalIndex) => {
+          setPreviewIndex(originalIndex);
         }}
         onPreviewFirst={() => {
-          if (images.length === 0) return;
-          setPreviewIndex(0);
+          if (filteredEntries.length === 0) return;
+          setPreviewIndex(filteredEntries[0].index);
         }}
       />
       <ImagePreviewModal
@@ -113,7 +126,10 @@ function DropZoneArea({ addFiles }: DropZoneAreaProps) {
 }
 
 type ImageListProps = {
-  images: ImageFile[];
+  entries: { image: ImageFile; index: number }[];
+  totalCount: number;
+  filterText: string;
+  onFilterChange: (value: string) => void;
   removeFile: (filename: string) => void;
   clearFiles: () => void;
   onProcess: () => void;
@@ -121,20 +137,36 @@ type ImageListProps = {
   onPreviewFirst: () => void;
 };
 function ImageList({
-  images,
+  entries,
+  totalCount,
+  filterText,
+  onFilterChange,
   removeFile,
   clearFiles,
   onProcess,
   onSelectImage,
   onPreviewFirst,
 }: ImageListProps) {
-  if (images.length === 0) return null;
+  const normalizedFilter = filterText.trim().toLowerCase();
+  if (totalCount === 0) return null;
   return (
     <div className="d-flex flex-column mt-3">
-      <div className="d-flex flex-row align-items-center justify-content-between gap-3 mb-3">
-        <h3>
-          Uploaded {images.length} {images.length === 1 ? "image" : "images"}:
+      <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-3 mb-3">
+        <h3 className="mb-0">
+          Uploaded {totalCount} {totalCount === 1 ? "image" : "images"}:
         </h3>
+        <div className="flex-grow-1">
+          <div className="d-flex align-items-center gap-2">
+            <input
+              id="upload-filter"
+              type="text"
+              className="form-control"
+              placeholder="Type to filter..."
+              value={filterText}
+              onChange={(event) => onFilterChange(event.target.value)}
+            />
+          </div>
+        </div>
         <div className="d-flex align-items-center gap-2">
         <button type="button" className="btn btn-primary" onClick={onProcess}>
           Process
@@ -163,15 +195,20 @@ function ImageList({
           gap: "0.5rem",
         }}
       >
-        {images.map((image) => (
-          <ImageListItem
-            image={image}
-            onRemove={removeFile}
-            onSelect={(selected) =>
-              onSelectImage(selected, images.indexOf(selected))
-            }
-          />
-        ))}
+        {entries.length === 0 ? (
+          <li className="list-group-item text-center text-muted">
+            No files match the current filter.
+          </li>
+        ) : (
+          entries.map(({ image, index }) => (
+            <ImageListItem
+              key={`${image.filename}-${index}`}
+              image={image}
+              onRemove={removeFile}
+              onSelect={() => onSelectImage(image, index)}
+            />
+          ))
+        )}
       </ul>
     </div>
   );
@@ -180,18 +217,17 @@ function ImageList({
 type ImageListItemProps = {
   image: ImageFile;
   onRemove: (filename: string) => void;
-  onSelect: (image: ImageFile) => void;
+  onSelect: () => void;
 };
 function ImageListItem({ image, onRemove, onSelect }: ImageListItemProps) {
   return (
     <li
-      key={image.filename}
       className="list-group-item d-flex align-items-center gap-3 rounded p-1"
       role="button"
       tabIndex={0}
-      onClick={() => onSelect(image)}
+      onClick={onSelect}
       onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") onSelect(image);
+        if (event.key === "Enter" || event.key === " ") onSelect();
       }}
       style={{ cursor: "pointer" }}
     >
