@@ -116,7 +116,7 @@ def process_image(image, x_size, y_size):
         check_carefully = gpa_vals.max().item() > 0.04
 
     coordinates[:, 1] = y_size - coordinates[:, 1] - 1
-    coordinates = coordinates.detach().flatten().long().tolist()
+    coordinates = coordinates.detach().flatten().round().long().tolist()
 
     return coordinates, check_carefully
 
