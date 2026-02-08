@@ -11,10 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app/backend
 
 COPY pyproject.toml uv.lock ./
+ENV UV_NO_DEV=1
 
 RUN uv sync --locked
 
 COPY ./main.py .
 COPY ./wings/ ./wings/
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
