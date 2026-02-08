@@ -374,7 +374,10 @@ export default function ReviewImages({
         <div className="w-100">
           <div
             className="d-flex align-items-center justify-content-between flex-wrap gap-2 border rounded px-3 py-2"
-            style={{ background: "#fff7f7", borderColor: "#f5c2c7" }}
+            style={{
+              background: "var(--bs-danger-bg-subtle)",
+              borderColor: "var(--bs-danger-border-subtle)",
+            }}
           >
             <div className="fw-semibold small">
               Please check images:{" "}
@@ -460,8 +463,8 @@ export default function ReviewImages({
               height: "55vh",
               borderRadius: "8px",
               overflow: "hidden",
-              background: "#f8f9fa",
-              border: "1px solid #dee2e6",
+              background: "var(--bs-tertiary-bg)",
+              border: "1px solid var(--bs-border-color)",
             }}
           >
             {canRender ? (
@@ -583,8 +586,8 @@ export default function ReviewImages({
                         textAnchor="middle"
                         fontSize={labelFont}
                         fontWeight={600}
-                        fill="#212529"
-                        stroke="#ffffff"
+                        fill="var(--bs-body-color)"
+                        stroke="var(--bs-body-bg)"
                         strokeWidth={crossStroke}
                         paintOrder="stroke"
                         pointerEvents="none"
@@ -767,10 +770,11 @@ export default function ReviewImages({
             onClick={(event) => event.stopPropagation()}
             style={{
               width: "min(90vw, 420px)",
-              background: "#fff",
+              background: "var(--bs-body-bg)",
               borderRadius: "10px",
               padding: "1rem",
-              boxShadow: "0 10px 30px rgba(0, 0, 0, 0.2)",
+              boxShadow: "var(--bs-box-shadow-lg)",
+              border: "1px solid var(--bs-border-color)",
               display: "flex",
               flexDirection: "column",
               gap: "0.75rem",

@@ -16,14 +16,28 @@ export type ImageFile = {
   error?: string;
 };
 
+type ThemeMode = "light" | "dark";
+
 const UPLOAD_MAX_EDGE = 256;
 const ENABLE_UPLOAD_RESIZE = true;
+const THEME_STORAGE_KEY = "wingai-theme";
+
+const getInitialTheme = (): ThemeMode => {
+  if (typeof window === "undefined") return "light";
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (stored === "light" || stored === "dark") return stored;
+  const prefersDark = window.matchMedia?.(
+    "(prefers-color-scheme: dark)",
+  ).matches;
+  return prefersDark ? "dark" : "light";
+};
 
 function App() {
   const [imageFiles, setImageFiles] = useState<ImageFile[]>([]);
   const [step, setStep] = useState<"upload" | "review">("upload");
   const [reviewIndex, setReviewIndex] = useState(0);
   const [showDownloadNotice, setShowDownloadNotice] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const downloadNoticeTimeout = useRef<number | null>(null);
   const pendingDimensionsRef = useRef(new Set<string>());
   const [processing, setProcessing] = useState({
@@ -543,6 +557,12 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-bs-theme", theme);
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
   const clearCheckForIndex = (imageIndex: number) => {
     setImageFiles((prevFiles) => {
       let changed = false;
@@ -578,7 +598,7 @@ function App() {
           className="mb-3"
           style={{
             display: "grid",
-            gridTemplateColumns: "auto 1fr",
+            gridTemplateColumns: "auto 1fr auto",
             alignItems: "center",
             columnGap: "0.75rem",
           }}
@@ -593,6 +613,22 @@ function App() {
               Download in progress...
             </div>
           )}
+          <div className="form-check form-switch m-0" style={{ justifySelf: "end" }}>
+            <input
+              className="form-check-input"
+              type="checkbox"
+              role="switch"
+              id="theme-switch"
+              checked={theme === "dark"}
+              onChange={() =>
+                setTheme((prev) => (prev === "dark" ? "light" : "dark"))
+              }
+              aria-label="Toggle dark mode"
+            />
+            <label className="form-check-label small" htmlFor="theme-switch">
+              Dark mode
+            </label>
+          </div>
         </div>
         {processing.inProgress && processing.total > 0 && (
           <div className="mb-3">

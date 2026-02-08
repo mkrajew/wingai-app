@@ -108,10 +108,10 @@ function DropZoneArea({ addFiles }: DropZoneAreaProps) {
         borderStyle: "dashed",
         borderWidth: "2px",
         backgroundColor: isDragActive
-          ? "#e8f2ff"
+          ? "var(--bs-primary-bg-subtle)"
           : isHovering
-            ? "#f1f3f7"
-            : "#f8f9fa",
+            ? "var(--bs-secondary-bg)"
+            : "var(--bs-tertiary-bg)",
       }}
     >
       <input {...getInputProps()} />
