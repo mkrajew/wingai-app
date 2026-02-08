@@ -16,6 +16,8 @@ export type ImageFile = {
   error?: string;
 };
 
+const UPLOAD_MAX_EDGE = 260;
+
 function App() {
   const [imageFiles, setImageFiles] = useState<ImageFile[]>([]);
   const [step, setStep] = useState<"upload" | "review">("upload");
@@ -114,6 +116,49 @@ function App() {
       img.onerror = () => reject(new Error("Failed to load image"));
       img.src = src;
     });
+  }
+
+  async function resizeImageForUpload(
+    file: File,
+    width: number,
+    height: number,
+  ) {
+    const longestEdge = Math.max(width, height);
+    if (!Number.isFinite(longestEdge) || longestEdge <= 0) {
+      throw new Error("Invalid dimensions for resize.");
+    }
+    if (longestEdge <= UPLOAD_MAX_EDGE) {
+      return file;
+    }
+
+    const scale = UPLOAD_MAX_EDGE / longestEdge;
+    const targetWidth = Math.max(1, Math.round(width * scale));
+    const targetHeight = Math.max(1, Math.round(height * scale));
+
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await loadImage(url);
+      const canvas = document.createElement("canvas");
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Failed to access canvas context");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((result) => {
+          if (!result) {
+            reject(new Error("Failed to resize image"));
+            return;
+          }
+          resolve(result);
+        }, "image/png");
+      });
+      return blob;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   }
 
   const addFiles = (files: File[]) => {
@@ -285,7 +330,8 @@ function App() {
     height: number,
   ) {
     const formData = new FormData();
-    formData.append("file", image.file, image.filename);
+    const uploadBlob = await resizeImageForUpload(image.file, width, height);
+    formData.append("file", uploadBlob, image.filename);
     formData.append("x_size", String(width));
     formData.append("y_size", String(height));
 
