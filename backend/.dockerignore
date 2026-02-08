@@ -35,5 +35,4 @@ Thumbs.db
 
 # If you do NOT need these large model weights during image build, ignore them:
 # (Uncomment if models are downloaded at runtime or mounted as volume)
-# models/*.pth
-# models/*.ckpt
+models/
