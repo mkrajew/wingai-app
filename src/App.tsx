@@ -16,7 +16,7 @@ export type ImageFile = {
   error?: string;
 };
 
-const UPLOAD_MAX_EDGE = 260;
+const UPLOAD_MAX_EDGE = 256;
 
 function App() {
   const [imageFiles, setImageFiles] = useState<ImageFile[]>([]);
