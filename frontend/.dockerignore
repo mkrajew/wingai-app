@@ -1,0 +1,27 @@
+# Node artifacts
+node_modules/
+dist/
+.vite/
+.cache/
+.npm/
+.yarn/
+.pnpm-store/
+
+# Logs
+*.log
+
+# Local env / secrets
+.env
+.env.*
+*secret*
+*credentials*
+
+# Git / editor / OS
+.git/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Tests / coverage (if present later)
+coverage/

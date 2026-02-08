@@ -1,0 +1,39 @@
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual envs
+.venv/
+venv/
+ENV/
+
+# Local env / secrets
+.env
+.env.*
+*.pem
+*.key
+secrets/
+*secret*
+*credentials*
+
+# Logs / temp
+*.log
+tmp/
+*.tmp
+
+# Git / editor
+.git/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# If you do NOT need these large model weights during image build, ignore them:
+# (Uncomment if models are downloaded at runtime or mounted as volume)
+# models/*.pth
+# models/*.ckpt

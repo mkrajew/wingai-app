@@ -1,0 +1,52 @@
+# VCS
+.git
+.gitignore
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+*.bak
+.vscode
+.idea
+
+# Secrets / env
+.env
+.env.*
+*.pem
+*.key
+*.crt
+secrets/
+**/*secret*
+**/*credentials*
+
+# Python caches / venvs
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/htmlcov/
+**/.venv/
+**/venv/
+**/ENV/
+
+# Node / frontend caches
+**/node_modules/
+**/dist/
+**/.vite/
+**/.cache/
+**/.npm/
+**/.yarn/
+**/.pnpm-store/
+
+# Logs
+**/*.log
+
+# Docker / CI artifacts (optional)
+**/*.tar
+**/*.gz
+**/*.zip
