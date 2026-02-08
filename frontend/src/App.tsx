@@ -353,7 +353,7 @@ function App() {
     formData.append("x_size", String(width));
     formData.append("y_size", String(height));
 
-    const response = await fetch("http://localhost:8000/analyze", {
+    const response = await fetch("/api/analyze", {
       method: "POST",
       body: formData,
     });
@@ -613,7 +613,10 @@ function App() {
               Download in progress...
             </div>
           )}
-          <div className="form-check form-switch m-0" style={{ justifySelf: "end" }}>
+          <div
+            className="form-check form-switch m-0"
+            style={{ justifySelf: "end" }}
+          >
             <input
               className="form-check-input"
               type="checkbox"
