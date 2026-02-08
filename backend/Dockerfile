@@ -15,6 +15,6 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --locked
 
 COPY ./main.py .
-COPY ./wings/ .
+COPY ./wings/ ./wings/
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
