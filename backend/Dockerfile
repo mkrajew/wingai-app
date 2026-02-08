@@ -1,5 +1,5 @@
 # FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
-FROM python:3.13-slim
+FROM ghcr.io/astral-sh/uv:latest
 
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -11,11 +11,9 @@ WORKDIR /app/backend
 
 COPY pyproject.toml uv.lock ./
 
-# Install pipx and then uv from PyPI
-RUN python -m pip install --upgrade pip && \
-    pip install uv && \
-    uv sync --frozen
+RUN uv sync --locked
 
-COPY . .
+COPY ./main.py .
+COPY ./wings/ .
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
