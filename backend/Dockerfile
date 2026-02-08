@@ -13,7 +13,7 @@ WORKDIR /app/backend
 COPY pyproject.toml uv.lock ./
 ENV UV_NO_DEV=1
 
-RUN uv sync --locked
+RUN uv sync --frozen --no-cache
 
 COPY ./main.py .
 COPY ./wings/ ./wings/
