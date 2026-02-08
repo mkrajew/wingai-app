@@ -22,6 +22,7 @@ function App() {
   const [reviewIndex, setReviewIndex] = useState(0);
   const [showDownloadNotice, setShowDownloadNotice] = useState(false);
   const downloadNoticeTimeout = useRef<number | null>(null);
+  const pendingDimensionsRef = useRef(new Set<string>());
   const [processing, setProcessing] = useState({
     inProgress: false,
     completed: 0,
@@ -340,9 +341,29 @@ function App() {
           let height = image.height;
           try {
             prepared = await normalizeJpegToPng(image);
-            const dimensions = await loadImageDimensions(prepared.previewUrl);
-            width = dimensions.width;
-            height = dimensions.height;
+            const hasDimensions =
+              typeof width === "number" &&
+              Number.isFinite(width) &&
+              width > 0 &&
+              typeof height === "number" &&
+              Number.isFinite(height) &&
+              height > 0;
+            if (!hasDimensions) {
+              const dimensions = await loadImageDimensions(prepared.previewUrl);
+              width = dimensions.width;
+              height = dimensions.height;
+            }
+            if (
+              typeof width !== "number" ||
+              !Number.isFinite(width) ||
+              width <= 0 ||
+              typeof height !== "number" ||
+              !Number.isFinite(height) ||
+              height <= 0
+            ) {
+              throw new Error("Invalid image dimensions.");
+            }
+
             const analysis = await analyzeImageWithBackend(
               prepared,
               width,
@@ -423,10 +444,41 @@ function App() {
   }
 
   useEffect(() => {
+    if (imageFiles.length === 0) return;
+    const pending = pendingDimensionsRef.current;
+
+    imageFiles.forEach((file) => {
+      const hasWidth =
+        typeof file.width === "number" && Number.isFinite(file.width);
+      const hasHeight =
+        typeof file.height === "number" && Number.isFinite(file.height);
+      if (hasWidth && hasHeight) return;
+      if (pending.has(file.previewUrl)) return;
+
+      pending.add(file.previewUrl);
+      void loadImageDimensions(file.previewUrl)
+        .then(({ width, height }) => {
+          setImageFiles((prevFiles) =>
+            prevFiles.map((item) =>
+              item.previewUrl === file.previewUrl
+                ? { ...item, width, height }
+                : item,
+            ),
+          );
+        })
+        .catch((error) => {
+          console.warn("Failed to read image dimensions.", file.filename, error);
+        })
+        .finally(() => {
+          pending.delete(file.previewUrl);
+        });
+    });
+  }, [imageFiles]);
+
+  useEffect(() => {
     return () => {
       imageFiles.forEach((it) => URL.revokeObjectURL(it.previewUrl));
     };
-    // TODO: dowiedziec sie o co tu chodzi
   }, []);
 
   useEffect(() => {

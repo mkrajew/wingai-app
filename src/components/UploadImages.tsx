@@ -147,7 +147,6 @@ function ImageList({
   onSelectImage,
   onPreviewFirst,
 }: ImageListProps) {
-  const normalizedFilter = filterText.trim().toLowerCase();
   if (totalCount === 0) return null;
   return (
     <div className="d-flex flex-column mt-3">
@@ -168,9 +167,9 @@ function ImageList({
           </div>
         </div>
         <div className="d-flex align-items-center gap-2">
-        <button type="button" className="btn btn-primary" onClick={onProcess}>
-          Process
-        </button>
+          <button type="button" className="btn btn-primary" onClick={onProcess}>
+            Process
+          </button>
           <button
             type="button"
             className="btn btn-outline-secondary"
@@ -220,6 +219,21 @@ type ImageListItemProps = {
   onSelect: () => void;
 };
 function ImageListItem({ image, onRemove, onSelect }: ImageListItemProps) {
+  const width = image.width;
+  const height = image.height;
+  let dimensionLabel = "dimensions...";
+
+  if (
+    typeof width === "number" &&
+    Number.isFinite(width) &&
+    width > 0 &&
+    typeof height === "number" &&
+    Number.isFinite(height) &&
+    height > 0
+  ) {
+    dimensionLabel = `${Math.round(width)}x${Math.round(height)}px`;
+  }
+
   return (
     <li
       className="list-group-item d-flex align-items-center gap-3 rounded p-1"
@@ -241,7 +255,9 @@ function ImageListItem({ image, onRemove, onSelect }: ImageListItemProps) {
       />
       <div className="flex-grow-1 flex-column">
         <div className="fw-semibold">{image.filename}</div>
-        <div className="text-muted">{formatBytes(image.file.size)}</div>
+        <div className="text-muted">
+          {formatBytes(image.file.size)} • {dimensionLabel}
+        </div>
       </div>
       <button
         type="button"

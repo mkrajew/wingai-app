@@ -30,6 +30,26 @@ export default function ImagePreviewModal({
 
   useEffect(() => {
     if (!previewImage) return;
+    setRenameValue(previewImage.filename);
+  }, [previewImage]);
+
+  useEffect(() => {
+    if (!previewImage) return;
+    const width = previewImage.width;
+    const height = previewImage.height;
+    const hasDimensions =
+      typeof width === "number" &&
+      Number.isFinite(width) &&
+      width > 0 &&
+      typeof height === "number" &&
+      Number.isFinite(height) &&
+      height > 0;
+
+    if (hasDimensions) {
+      setPreviewDimensions({ width, height });
+      return;
+    }
+
     const img = new Image();
     img.onload = () => {
       setPreviewDimensions({
@@ -38,7 +58,6 @@ export default function ImagePreviewModal({
       });
     };
     img.src = previewImage.previewUrl;
-    setRenameValue(previewImage.filename);
   }, [previewImage]);
 
   useEffect(() => {
