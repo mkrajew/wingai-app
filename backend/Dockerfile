@@ -1,4 +1,6 @@
-FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
+# FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
+FROM python:3.13-slim
+
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
