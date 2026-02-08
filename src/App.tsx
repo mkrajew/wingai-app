@@ -17,6 +17,7 @@ export type ImageFile = {
 };
 
 const UPLOAD_MAX_EDGE = 256;
+const ENABLE_UPLOAD_RESIZE = true;
 
 function App() {
   const [imageFiles, setImageFiles] = useState<ImageFile[]>([]);
@@ -123,6 +124,9 @@ function App() {
     width: number,
     height: number,
   ) {
+    if (!ENABLE_UPLOAD_RESIZE) {
+      return file;
+    }
     const longestEdge = Math.max(width, height);
     if (!Number.isFinite(longestEdge) || longestEdge <= 0) {
       throw new Error("Invalid dimensions for resize.");
@@ -513,7 +517,11 @@ function App() {
           );
         })
         .catch((error) => {
-          console.warn("Failed to read image dimensions.", file.filename, error);
+          console.warn(
+            "Failed to read image dimensions.",
+            file.filename,
+            error,
+          );
         })
         .finally(() => {
           pending.delete(file.previewUrl);
