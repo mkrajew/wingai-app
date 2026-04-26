@@ -13,6 +13,9 @@ type UploadImagesProps = {
   clearFiles: () => void;
   renameFile: (index: number, newName: string) => void;
   onProcess: () => void;
+  onDetect: () => void;
+  isDetecting: boolean;
+  detectionError: string | null;
 };
 function UploadImages({
   images,
@@ -21,6 +24,9 @@ function UploadImages({
   clearFiles,
   renameFile,
   onProcess,
+  onDetect,
+  isDetecting,
+  detectionError,
 }: UploadImagesProps) {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [filterText, setFilterText] = useState("");
@@ -52,6 +58,9 @@ function UploadImages({
         removeFile={removeFile}
         clearFiles={clearFiles}
         onProcess={onProcess}
+        onDetect={onDetect}
+        isDetecting={isDetecting}
+        detectionError={detectionError}
         onSelectImage={(_image, originalIndex) => {
           setPreviewIndex(originalIndex);
         }}
@@ -133,6 +142,9 @@ type ImageListProps = {
   removeFile: (filename: string) => void;
   clearFiles: () => void;
   onProcess: () => void;
+  onDetect: () => void;
+  isDetecting: boolean;
+  detectionError: string | null;
   onSelectImage: (image: ImageFile, index: number) => void;
   onPreviewFirst: () => void;
 };
@@ -144,6 +156,9 @@ function ImageList({
   removeFile,
   clearFiles,
   onProcess,
+  onDetect,
+  isDetecting,
+  detectionError,
   onSelectImage,
   onPreviewFirst,
 }: ImageListProps) {
@@ -184,8 +199,28 @@ function ImageList({
           >
             Clear
           </button>
+          <button
+            type="button"
+            className="btn btn-outline-primary d-flex align-items-center gap-2"
+            onClick={onDetect}
+            disabled={isDetecting}
+          >
+            {isDetecting && (
+              <span
+                className="spinner-border spinner-border-sm"
+                role="status"
+                aria-hidden="true"
+              />
+            )}
+            Detect
+          </button>
         </div>
       </div>
+      {detectionError && (
+        <div className="alert alert-danger py-2 px-3 mb-2 small" role="alert">
+          Detection failed: {detectionError}
+        </div>
+      )}
       <ul
         className="list-group w-100"
         style={{
@@ -245,14 +280,26 @@ function ImageListItem({ image, onRemove, onSelect }: ImageListItemProps) {
       }}
       style={{ cursor: "pointer" }}
     >
-      <img
-        src={image.previewUrl}
-        alt={image.filename}
-        width={56}
-        height={56}
-        style={{ objectFit: "cover" }}
-        className="rounded border"
-      />
+      <div className="position-relative" style={{ flexShrink: 0 }}>
+        <img
+          src={image.previewUrl}
+          alt={image.filename}
+          width={56}
+          height={56}
+          style={{ objectFit: "cover", display: "block" }}
+          className="rounded border"
+        />
+        {image.detections !== undefined && (
+          <span
+            className={`badge position-absolute bottom-0 end-0 ${
+              image.detections.length > 0 ? "bg-success" : "bg-secondary"
+            }`}
+            style={{ fontSize: "0.6rem" }}
+          >
+            {image.detections.length}
+          </span>
+        )}
+      </div>
       <div className="flex-grow-1 flex-column">
         <div className="fw-semibold">{image.filename}</div>
         <div className="text-muted">
