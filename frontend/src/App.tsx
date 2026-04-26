@@ -731,7 +731,15 @@ function App() {
             columnGap: "0.75rem",
           }}
         >
-          <h2 className="mb-0">WingAI</h2>
+          <h2 className="mb-0">
+            <button
+              type="button"
+              style={{ font: "inherit", color: "inherit", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+              onClick={resetAll}
+            >
+              WingAI
+            </button>
+          </h2>
           {showDownloadNotice && (
             <div
               className="alert alert-success py-2 px-3 mb-0 small"
