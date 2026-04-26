@@ -133,6 +133,13 @@ export default function ImagePreviewModal({
         return;
       }
 
+      if (!isEditingName && (event.key === "b" || event.key === "B")) {
+        if (previewIndex !== null && previewImage.detections && previewImage.detections.length > 0) {
+          onToggleDetections(previewIndex);
+        }
+        return;
+      }
+
       if (event.key === "Escape") {
         onClose();
       } else if (event.key === "Delete") {
@@ -163,6 +170,7 @@ export default function ImagePreviewModal({
     onClose,
     onPreviewIndexChange,
     onRemove,
+    onToggleDetections,
     previewImage,
     previewIndex,
   ]);
