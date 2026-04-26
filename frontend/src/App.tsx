@@ -731,15 +731,18 @@ function App() {
             columnGap: "0.75rem",
           }}
         >
-          <h2 className="mb-0">
-            <button
-              type="button"
-              style={{ font: "inherit", color: "inherit", background: "none", border: "none", padding: 0, cursor: "pointer" }}
-              onClick={resetAll}
-            >
-              WingAI
-            </button>
-          </h2>
+          <button
+            type="button"
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center" }}
+            onClick={resetAll}
+            aria-label="WingAI Home"
+          >
+            <img
+              src={theme === "dark" ? "/logo-dark.png" : "/logo.png"}
+              alt="WingAI"
+              style={{ height: "80px", width: "auto" }}
+            />
+          </button>
           {showDownloadNotice && (
             <div
               className="alert alert-success py-2 px-3 mb-0 small"
