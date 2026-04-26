@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import UploadImages from "./components/UploadImages";
 import ReviewImages from "./components/ReviewImages";
+import DetectionModelPanel from "./components/DetectionModelPanel";
 
 export default App;
 
@@ -614,23 +615,26 @@ function App() {
             </div>
           )}
           <div
-            className="form-check form-switch m-0"
+            className="d-flex align-items-center gap-3"
             style={{ justifySelf: "end" }}
           >
-            <input
-              className="form-check-input"
-              type="checkbox"
-              role="switch"
-              id="theme-switch"
-              checked={theme === "dark"}
-              onChange={() =>
-                setTheme((prev) => (prev === "dark" ? "light" : "dark"))
-              }
-              aria-label="Toggle dark mode"
-            />
-            <label className="form-check-label small" htmlFor="theme-switch">
-              Dark mode
-            </label>
+            <DetectionModelPanel />
+            <div className="form-check form-switch m-0">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                role="switch"
+                id="theme-switch"
+                checked={theme === "dark"}
+                onChange={() =>
+                  setTheme((prev) => (prev === "dark" ? "light" : "dark"))
+                }
+                aria-label="Toggle dark mode"
+              />
+              <label className="form-check-label small" htmlFor="theme-switch">
+                Dark mode
+              </label>
+            </div>
           </div>
         </div>
         {processing.inProgress && processing.total > 0 && (
