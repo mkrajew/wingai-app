@@ -20,6 +20,7 @@ export type ImageFile = {
   height?: number;
   error?: string;
   detections?: Detection[];
+  showDetections?: boolean;
 };
 
 type ThemeMode = "light" | "dark";
@@ -51,7 +52,11 @@ function App() {
     completed: 0,
     total: 0,
   });
-  const [detecting, setDetecting] = useState(false);
+  const [detection, setDetection] = useState({
+    inProgress: false,
+    completed: 0,
+    total: 0,
+  });
   const [detectionError, setDetectionError] = useState<string | null>(null);
 
   const fileKey = (file: File) =>
@@ -268,8 +273,8 @@ function App() {
   }
 
   async function handleDetect() {
-    if (detecting || imageFiles.length === 0) return;
-    setDetecting(true);
+    if (detection.inProgress || imageFiles.length === 0) return;
+    setDetection({ inProgress: true, completed: 0, total: imageFiles.length });
     setDetectionError(null);
     try {
       const results: ImageFile[] = [];
@@ -284,12 +289,27 @@ function App() {
             return;
           }
           results.push(img);
+        } finally {
+          setDetection((prev) => ({
+            ...prev,
+            completed: Math.min(prev.total, prev.completed + 1),
+          }));
         }
       }
       setImageFiles(results);
     } finally {
-      setDetecting(false);
+      setDetection((prev) => ({ ...prev, inProgress: false }));
     }
+  }
+
+  function handleToggleDetections(index: number) {
+    setImageFiles((prevFiles) =>
+      prevFiles.map((file, i) =>
+        i === index
+          ? { ...file, showDetections: !(file.showDetections ?? true) }
+          : file,
+      ),
+    );
   }
 
   function updatePoint(
@@ -669,6 +689,31 @@ function App() {
             </div>
           </div>
         </div>
+        {detection.inProgress && detection.total > 0 && (
+          <div className="mb-3">
+            <div className="small text-muted mb-1">
+              Detecting objects... {detection.completed}/{detection.total}
+            </div>
+            <div
+              className="progress"
+              role="progressbar"
+              aria-valuenow={Math.round(
+                (detection.completed / detection.total) * 100,
+              )}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="progress-bar bg-success progress-bar-striped progress-bar-animated"
+                style={{
+                  width: `${Math.round(
+                    (detection.completed / detection.total) * 100,
+                  )}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
         {processing.inProgress && processing.total > 0 && (
           <div className="mb-3">
             <div className="small text-muted mb-1">
@@ -703,8 +748,9 @@ function App() {
             renameFile={renameFile}
             onProcess={processImages}
             onDetect={handleDetect}
-            isDetecting={detecting}
+            isDetecting={detection.inProgress}
             detectionError={detectionError}
+            onToggleDetections={handleToggleDetections}
           />
         )}
         {step === "review" && (
