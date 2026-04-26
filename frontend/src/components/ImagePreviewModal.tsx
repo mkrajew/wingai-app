@@ -63,16 +63,6 @@ export default function ImagePreviewModal({
         ctx.strokeStyle = "#00e676";
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, w, h);
-
-        const label = `${det.className} ${(det.confidence * 100).toFixed(0)}%`;
-        ctx.font = "bold 13px system-ui, sans-serif";
-        const textW = ctx.measureText(label).width;
-        const lx = Math.max(0, x);
-        const ly = y >= 20 ? y - 20 : y + h;
-        ctx.fillStyle = "#00e676";
-        ctx.fillRect(lx, ly, textW + 8, 20);
-        ctx.fillStyle = "#000";
-        ctx.fillText(label, lx + 4, ly + 14);
       }
     },
     [],
