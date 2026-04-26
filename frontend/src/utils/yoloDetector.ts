@@ -1,8 +1,9 @@
 import * as ort from "onnxruntime-web";
-import wasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.wasm?url";
-import mjsUrl from "onnxruntime-web/ort-wasm-simd-threaded.mjs?url";
 
-ort.env.wasm.wasmPaths = { wasm: wasmUrl, mjs: mjsUrl };
+// Serve WASM/MJS files from the root so their filenames stay unhashed.
+// The ortAssetsPlugin in vite.config.ts copies them there during build
+// and serves them with correct MIME types in dev.
+ort.env.wasm.wasmPaths = "/";
 ort.env.wasm.numThreads = 1;
 
 // ─── Public types ─────────────────────────────────────────────────────────────
