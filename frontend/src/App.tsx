@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import UploadImages from "./components/UploadImages";
 import ReviewImages from "./components/ReviewImages";
 import DetectionModelPanel from "./components/DetectionModelPanel";
+import HelpPanel from "./components/HelpPanel";
 import { detectFromUrl } from "./utils/yoloDetector";
 import type { Detection } from "./utils/yoloDetector";
 
@@ -744,6 +745,7 @@ function App() {
             className="d-flex align-items-center gap-3"
             style={{ justifySelf: "end" }}
           >
+            <HelpPanel />
             <DetectionModelPanel />
             <div className="form-check form-switch m-0">
               <input
