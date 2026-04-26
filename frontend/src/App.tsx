@@ -2,8 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import UploadImages from "./components/UploadImages";
 import ReviewImages from "./components/ReviewImages";
 import DetectionModelPanel from "./components/DetectionModelPanel";
+import { detectFromUrl } from "./utils/yoloDetector";
+import type { Detection } from "./utils/yoloDetector";
 
 export default App;
+
+export type { Detection };
 
 export type ImageFile = {
   filename: string;
@@ -15,6 +19,7 @@ export type ImageFile = {
   width?: number;
   height?: number;
   error?: string;
+  detections?: Detection[];
 };
 
 type ThemeMode = "light" | "dark";
@@ -46,6 +51,8 @@ function App() {
     completed: 0,
     total: 0,
   });
+  const [detecting, setDetecting] = useState(false);
+  const [detectionError, setDetectionError] = useState<string | null>(null);
 
   const fileKey = (file: File) =>
     `${file.name}|${file.size}|${file.lastModified}`;
@@ -258,6 +265,31 @@ function App() {
     });
     setStep("upload");
     setReviewIndex(0);
+  }
+
+  async function handleDetect() {
+    if (detecting || imageFiles.length === 0) return;
+    setDetecting(true);
+    setDetectionError(null);
+    try {
+      const results: ImageFile[] = [];
+      for (const img of imageFiles) {
+        try {
+          const dets = await detectFromUrl(img.previewUrl);
+          results.push({ ...img, detections: dets });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Unknown error";
+          if (results.length === 0) {
+            setDetectionError(message);
+            return;
+          }
+          results.push(img);
+        }
+      }
+      setImageFiles(results);
+    } finally {
+      setDetecting(false);
+    }
   }
 
   function updatePoint(
@@ -670,6 +702,9 @@ function App() {
             clearFiles={clearFiles}
             renameFile={renameFile}
             onProcess={processImages}
+            onDetect={handleDetect}
+            isDetecting={detecting}
+            detectionError={detectionError}
           />
         )}
         {step === "review" && (

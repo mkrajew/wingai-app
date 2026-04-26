@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { formatBytes } from "../utils";
-import type { ImageFile } from "../App";
+import type { ImageFile, Detection } from "../App";
 
 export type ImagePreviewModalProps = {
   images: ImageFile[];
@@ -27,6 +27,56 @@ export default function ImagePreviewModal({
   } | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const drawBoxes = useCallback(
+    (detections: Detection[] | undefined) => {
+      const img = imgRef.current;
+      const canvas = canvasRef.current;
+      if (!img || !canvas || !detections || detections.length === 0) return;
+
+      const dispW = img.offsetWidth;
+      const dispH = img.offsetHeight;
+      if (dispW === 0 || dispH === 0) return;
+
+      canvas.width = dispW;
+      canvas.height = dispH;
+
+      const scaleX = dispW / img.naturalWidth;
+      const scaleY = dispH / img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      ctx.clearRect(0, 0, dispW, dispH);
+
+      for (const det of detections) {
+        const x = det.x1 * scaleX;
+        const y = det.y1 * scaleY;
+        const w = (det.x2 - det.x1) * scaleX;
+        const h = (det.y2 - det.y1) * scaleY;
+
+        ctx.strokeStyle = "#00e676";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+
+        const label = `${det.className} ${(det.confidence * 100).toFixed(0)}%`;
+        ctx.font = "bold 13px system-ui, sans-serif";
+        const textW = ctx.measureText(label).width;
+        const lx = Math.max(0, x);
+        const ly = y >= 20 ? y - 20 : y + h;
+        ctx.fillStyle = "#00e676";
+        ctx.fillRect(lx, ly, textW + 8, 20);
+        ctx.fillStyle = "#000";
+        ctx.fillText(label, lx + 4, ly + 14);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    drawBoxes(previewImage?.detections);
+  }, [drawBoxes, previewImage]);
 
   useEffect(() => {
     if (!previewImage) return;
@@ -172,16 +222,33 @@ export default function ImagePreviewModal({
             overflow: "hidden",
           }}
         >
-          <img
-            src={previewImage.previewUrl}
-            alt={previewImage.filename}
-            style={{
-              display: "block",
-              maxWidth: "100%",
-              maxHeight: "100%",
-              objectFit: "contain",
-            }}
-          />
+          <div style={{ position: "relative", lineHeight: 0 }}>
+            <img
+              ref={imgRef}
+              src={previewImage.previewUrl}
+              alt={previewImage.filename}
+              onLoad={() => drawBoxes(previewImage.detections)}
+              style={{
+                display: "block",
+                maxWidth: "100%",
+                maxHeight: "100%",
+                objectFit: "contain",
+              }}
+            />
+            {previewImage.detections && previewImage.detections.length > 0 && (
+              <canvas
+                ref={canvasRef}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  pointerEvents: "none",
+                }}
+              />
+            )}
+          </div>
         </div>
         <input
           type="text"
