@@ -25,7 +25,7 @@ export const CLASS_NAMES: string[] = ["object"];
 const CACHE_NAME = "wingai-models-v1";
 const MODEL_URL = "/models/detector.onnx";
 const INPUT_SIZE = 640;
-const CONF_THRESHOLD = 0.25;
+const DEFAULT_CONF_THRESHOLD = 0.10;
 const IOU_THRESHOLD = 0.45;
 
 // ─── Session singleton ────────────────────────────────────────────────────────
@@ -135,41 +135,29 @@ function decodeBoxes(
   padX: number,
   padY: number,
   classNames: string[],
+  confThreshold: number,
 ): Detection[] {
   const data = output.data as Float32Array;
   const [, dim1, dim2] = output.dims as [number, number, number];
   const numClasses = classNames.length;
+
+  const maxVal = data.reduce((m, v) => (v > m ? v : m), -Infinity);
 
   // --- Format detection ---
   // v8/v9 canonical  [1, 4+C, N]  dim1 < dim2, no objectness
   // v5/v7            [1, N, 5+C]  dim2 = 5+C,  with objectness
   // v8 transposed    [1, N, 4+C]  dim2 = 4+C,  no objectness
   // decoded-nms      [1, N, 6]    model has NMS baked in;
-  //                               rows = [x1,y1,x2,y2,conf,cls_id] in model px space
-  //                               KEY indicator: negative coordinate values appear
+  //                               rows = [x1,y1,x2,y2,conf,cls_id] in absolute pixel coords
+  //                               KEY indicator: maxVal >> 1 (pixel coords, not probabilities)
   const isV8Canonical = dim1 < dim2;
 
-  // Scan a small slice for negative values — impossible in raw YOLO prob outputs
-  // but common in decoded absolute-coordinate outputs (letterbox spill-over)
-  let isDecodedNMS = false;
-  if (!isV8Canonical) {
-    const scanLen = Math.min(dim1 * dim2, 600);
-    for (let k = 0; k < scanLen; k++) {
-      if (data[k] < -1) { isDecodedNMS = true; break; }
-    }
-  }
+  // decoded-nms: dim2 must be 6 and max value is in pixel range (>2), not a probability.
+  // This is robust even when all boxes are inside the padding-free region (no negatives).
+  const isDecodedNMS = !isV8Canonical && dim2 === 6 && numClasses === 1 && maxVal > 2;
 
   const isV8Transposed = !isV8Canonical && !isDecodedNMS && dim2 === 4 + numClasses;
   const isV5           = !isV8Canonical && !isDecodedNMS && dim2 === 5 + numClasses;
-
-  console.log(
-    "[YOLO] format:",
-    isV8Canonical  ? "v8-canonical"  :
-    isDecodedNMS   ? "decoded-nms"   :
-    isV8Transposed ? "v8-transposed" :
-    isV5           ? "v5"            : "unknown",
-    `dim1=${dim1} dim2=${dim2} classes=${numClasses}`,
-  );
 
   const numBoxes = isV8Canonical ? dim2 : dim1;
   const detections: Detection[] = [];
@@ -181,7 +169,7 @@ function decodeBoxes(
     for (let i = 0; i < numBoxes; i++) {
       const base = i * dim2;
       const conf = data[base + 4];
-      if (conf < CONF_THRESHOLD) continue;
+      if (conf < confThreshold) continue;
 
       const x1m = data[base];
       const y1m = data[base + 1];
@@ -220,7 +208,7 @@ function decodeBoxes(
         const s = data[(4 + c) * numBoxes + i];
         if (s > maxScore) { maxScore = s; classId = c; }
       }
-      if (maxScore < CONF_THRESHOLD) continue;
+      if (maxScore < confThreshold) continue;
       detections.push(
         makeDetection(cx, cy, bw, bh, maxScore, classId, classNames, origW, origH, scale, padX, padY),
       );
@@ -236,7 +224,7 @@ function decodeBoxes(
         const s = data[base + 4 + c];
         if (s > maxScore) { maxScore = s; classId = c; }
       }
-      if (maxScore < CONF_THRESHOLD) continue;
+      if (maxScore < confThreshold) continue;
       detections.push(
         makeDetection(cx, cy, bw, bh, maxScore, classId, classNames, origW, origH, scale, padX, padY),
       );
@@ -253,7 +241,7 @@ function decodeBoxes(
         const s = obj * data[base + 5 + c];
         if (s > maxScore) { maxScore = s; classId = c; }
       }
-      if (maxScore < CONF_THRESHOLD) continue;
+      if (maxScore < confThreshold) continue;
       detections.push(
         makeDetection(cx, cy, bw, bh, maxScore, classId, classNames, origW, origH, scale, padX, padY),
       );
@@ -295,6 +283,7 @@ function nms(dets: Detection[]): Detection[] {
 export async function detectFromUrl(
   url: string,
   classNames = CLASS_NAMES,
+  confThreshold = DEFAULT_CONF_THRESHOLD,
 ): Promise<Detection[]> {
   const sess = await getSession();
 
@@ -311,18 +300,6 @@ export async function detectFromUrl(
   const output = results[sess.outputNames[0]];
   if (!output) throw new Error("No output tensor from model");
 
-  const data = output.data as Float32Array;
-  const maxVal = data.reduce((m, v) => (v > m ? v : m), -Infinity);
-  const minVal = data.reduce((m, v) => (v < m ? v : m), Infinity);
-  console.log(
-    "[YOLO] output tensor:",
-    output.name,
-    "dims:", JSON.stringify(output.dims),
-    "min:", minVal.toFixed(4),
-    "max:", maxVal.toFixed(4),
-    "dtype:", output.type,
-  );
-
   return decodeBoxes(
     output,
     img.naturalWidth,
@@ -331,5 +308,6 @@ export async function detectFromUrl(
     padX,
     padY,
     classNames,
+    confThreshold,
   );
 }
