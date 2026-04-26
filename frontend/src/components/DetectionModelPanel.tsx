@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Download,
   ChevronDown,
@@ -33,12 +33,24 @@ export default function DetectionModelPanel() {
   const [modelStatus, setModelStatus] = useState<ModelStatus>({
     phase: "checking",
   });
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     isModelCached().then((cached) => {
       setModelStatus(cached ? { phase: "ready" } : { phase: "not_loaded" });
     });
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
 
   const loadModel = async () => {
     if (modelStatus.phase === "loading") return;
@@ -109,7 +121,7 @@ export default function DetectionModelPanel() {
     ) : null;
 
   return (
-    <div className="position-relative">
+    <div className="position-relative" ref={containerRef}>
       <button
         type="button"
         className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
