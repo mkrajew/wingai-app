@@ -1,0 +1,71 @@
+/* WingAI brand palette — overrides Bootstrap 5 CSS variables.
+   Derived from the logo: Ink Black (#111111), Amber (#FFB800), White (#FFFFFF). */
+
+:root,
+[data-bs-theme="light"] {
+  --bs-primary: #ffb800;
+  --bs-primary-rgb: 255, 184, 0;
+  --bs-link-color: #c88a00;
+  --bs-link-hover-color: #a06c00;
+  --bs-link-color-rgb: 200, 138, 0;
+}
+
+/* btn-primary: amber fill with dark text for contrast */
+.btn-primary {
+  --bs-btn-bg: #ffb800;
+  --bs-btn-border-color: #ffb800;
+  --bs-btn-color: #111111;
+  --bs-btn-hover-bg: #e0a400;
+  --bs-btn-hover-border-color: #d09800;
+  --bs-btn-hover-color: #111111;
+  --bs-btn-active-bg: #cc9600;
+  --bs-btn-active-border-color: #cc9600;
+  --bs-btn-active-color: #111111;
+  --bs-btn-disabled-bg: #ffb800;
+  --bs-btn-disabled-border-color: #ffb800;
+  --bs-btn-disabled-color: #111111;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: #c88a00;
+  --bs-btn-border-color: #ffb800;
+  --bs-btn-hover-bg: #ffb800;
+  --bs-btn-hover-border-color: #ffb800;
+  --bs-btn-hover-color: #111111;
+  --bs-btn-active-bg: #e0a400;
+  --bs-btn-active-border-color: #e0a400;
+  --bs-btn-active-color: #111111;
+}
+
+/* Dark mode: ink-black body, amber accents */
+[data-bs-theme="dark"] {
+  --bs-body-bg: #111111;
+  --bs-body-bg-rgb: 17, 17, 17;
+  --bs-tertiary-bg: #1d1d1d;
+  --bs-tertiary-bg-rgb: 29, 29, 29;
+  --bs-secondary-bg: #1d1d1d;
+  --bs-secondary-bg-rgb: 29, 29, 29;
+  --bs-primary: #ffb800;
+  --bs-primary-rgb: 255, 184, 0;
+  --bs-link-color: #ffb800;
+  --bs-link-hover-color: #ffd060;
+  --bs-link-color-rgb: 255, 184, 0;
+  --bs-border-color: #2e2e2e;
+  --bs-border-color-translucent: rgba(255, 255, 255, 0.1);
+}
+
+/* Progress bars use amber */
+.progress-bar {
+  background-color: #ffb800;
+}
+
+/* Form switch thumb picks up primary */
+.form-check-input:checked {
+  background-color: #ffb800;
+  border-color: #ffb800;
+}
+
+.form-check-input:focus {
+  border-color: #ffb800;
+  box-shadow: 0 0 0 0.25rem rgba(255, 184, 0, 0.25);
+}
