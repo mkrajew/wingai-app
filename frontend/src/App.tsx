@@ -302,6 +302,25 @@ function App() {
     }
   }
 
+  async function handleDetectSingle(index: number) {
+    if (detection.inProgress) return;
+    const img = imageFiles[index];
+    if (!img) return;
+    setDetection({ inProgress: true, completed: 0, total: 1 });
+    setDetectionError(null);
+    try {
+      const dets = await detectFromUrl(img.previewUrl);
+      setImageFiles((prev) =>
+        prev.map((f, i) => (i === index ? { ...f, detections: dets } : f)),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setDetectionError(message);
+    } finally {
+      setDetection({ inProgress: false, completed: 1, total: 1 });
+    }
+  }
+
   function handleToggleDetections(index: number) {
     setImageFiles((prevFiles) =>
       prevFiles.map((file, i) =>
@@ -806,6 +825,7 @@ function App() {
             isDetecting={detection.inProgress}
             detectionError={detectionError}
             onToggleDetections={handleToggleDetections}
+            onDetectSingle={handleDetectSingle}
           />
         )}
         {step === "review" && (

@@ -11,6 +11,8 @@ export type ImagePreviewModalProps = {
   onRemove: (filename: string) => void;
   onRename: (index: number, newName: string) => void;
   onToggleDetections: (index: number) => void;
+  onDetectSingle: (index: number) => void;
+  isDetecting: boolean;
 };
 
 export default function ImagePreviewModal({
@@ -21,6 +23,8 @@ export default function ImagePreviewModal({
   onRemove,
   onRename,
   onToggleDetections,
+  onDetectSingle,
+  isDetecting,
 }: ImagePreviewModalProps) {
   const previewImage =
     previewIndex === null ? null : images[previewIndex] ?? null;
@@ -305,7 +309,25 @@ export default function ImagePreviewModal({
           >
             Previous
           </button>
-          {previewImage.detections && previewImage.detections.length > 0 ? (
+          {previewImage.detections === undefined ? (
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-primary d-flex align-items-center gap-2"
+              disabled={isDetecting}
+              onClick={() => {
+                if (previewIndex !== null) onDetectSingle(previewIndex);
+              }}
+            >
+              {isDetecting && (
+                <span
+                  className="spinner-border spinner-border-sm"
+                  role="status"
+                  aria-hidden="true"
+                />
+              )}
+              Detect
+            </button>
+          ) : previewImage.detections.length > 0 ? (
             <button
               type="button"
               className={`btn btn-sm d-flex align-items-center gap-2 ${
