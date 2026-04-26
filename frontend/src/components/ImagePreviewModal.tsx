@@ -247,22 +247,6 @@ export default function ImagePreviewModal({
             )}
           </div>
         </div>
-        {previewImage.detections && previewImage.detections.length > 0 && (
-          <div className="d-flex justify-content-center">
-            <button
-              type="button"
-              className={`btn btn-sm d-flex align-items-center gap-2 ${
-                showBoxes ? "btn-success" : "btn-outline-secondary"
-              }`}
-              onClick={() => {
-                if (previewIndex !== null) onToggleDetections(previewIndex);
-              }}
-            >
-              <Check size={14} />
-              {showBoxes ? "Bounding boxes on" : "Bounding boxes off"}
-            </button>
-          </div>
-        )}
         <input
           type="text"
           className="form-control text-center fw-semibold"
@@ -308,7 +292,7 @@ export default function ImagePreviewModal({
             Delete
           </button>
         </div>
-        <div className="d-flex justify-content-between gap-2">
+        <div className="d-flex justify-content-between align-items-center gap-2">
           <button
             type="button"
             className="btn btn-outline-secondary"
@@ -321,6 +305,22 @@ export default function ImagePreviewModal({
           >
             Previous
           </button>
+          {previewImage.detections && previewImage.detections.length > 0 ? (
+            <button
+              type="button"
+              className={`btn btn-sm d-flex align-items-center gap-2 ${
+                showBoxes ? "btn-success" : "btn-outline-secondary"
+              }`}
+              onClick={() => {
+                if (previewIndex !== null) onToggleDetections(previewIndex);
+              }}
+            >
+              <Check size={14} />
+              {showBoxes ? "Bounding box on" : "Bounding box off"}
+            </button>
+          ) : (
+            <div />
+          )}
           <button
             type="button"
             className="btn btn-outline-secondary"
