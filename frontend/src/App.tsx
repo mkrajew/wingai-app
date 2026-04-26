@@ -740,7 +740,7 @@ function App() {
             <img
               src={theme === "dark" ? "/logo-dark.png" : "/logo.png"}
               alt="WingAI"
-              style={{ height: "80px", width: "auto" }}
+              style={{ height: "100px", width: "auto" }}
             />
           </button>
           {showDownloadNotice && (
