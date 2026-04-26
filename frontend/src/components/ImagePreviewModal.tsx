@@ -54,7 +54,10 @@ export default function ImagePreviewModal({
 
       ctx.clearRect(0, 0, dispW, dispH);
 
-      for (const det of detections) {
+      const topDetection = detections.reduce((best, det) =>
+        det.confidence > best.confidence ? det : best,
+      );
+      for (const det of [topDetection]) {
         const x = det.x1 * scaleX;
         const y = det.y1 * scaleY;
         const w = (det.x2 - det.x1) * scaleX;

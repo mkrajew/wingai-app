@@ -442,6 +442,55 @@ function App() {
     return { coords, check };
   }
 
+  async function cropImageToBoundingBox(image: ImageFile): Promise<ImageFile> {
+    const dets = image.detections;
+    if (!dets || dets.length === 0 || !(image.showDetections ?? true)) {
+      return image;
+    }
+
+    const topDet = dets.reduce((best, det) =>
+      det.confidence > best.confidence ? det : best,
+    );
+
+    const x1 = Math.max(0, Math.round(topDet.x1));
+    const y1 = Math.max(0, Math.round(topDet.y1));
+    const cropW = Math.max(1, Math.round(topDet.x2) - x1);
+    const cropH = Math.max(1, Math.round(topDet.y2) - y1);
+
+    try {
+      const srcImg = await loadImage(image.previewUrl);
+      const canvas = document.createElement("canvas");
+      canvas.width = cropW;
+      canvas.height = cropH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return image;
+      ctx.drawImage(srcImg, x1, y1, cropW, cropH, 0, 0, cropW, cropH);
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b) => {
+          if (!b) reject(new Error("Failed to crop image"));
+          else resolve(b);
+        }, "image/png");
+      });
+
+      const croppedFile = new File([blob], image.filename, {
+        type: "image/png",
+        lastModified: image.file.lastModified,
+      });
+
+      return {
+        ...image,
+        file: croppedFile,
+        previewUrl: URL.createObjectURL(blob),
+        width: cropW,
+        height: cropH,
+      };
+    } catch (err) {
+      console.warn("Failed to crop image, using original.", image.filename, err);
+      return image;
+    }
+  }
+
   async function processImagesWithBackend(
     images: ImageFile[],
     existing: ImageFile[] = [],
@@ -457,7 +506,13 @@ function App() {
           let width = image.width;
           let height = image.height;
           try {
-            prepared = await normalizeJpegToPng(image);
+            const cropped = await cropImageToBoundingBox(prepared);
+            if (cropped !== prepared) {
+              prepared = cropped;
+              width = prepared.width;
+              height = prepared.height;
+            }
+            prepared = await normalizeJpegToPng(prepared);
             const hasDimensions =
               typeof width === "number" &&
               Number.isFinite(width) &&
