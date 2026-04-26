@@ -43,6 +43,6 @@ function ortAssetsPlugin(): Plugin {
 export default defineConfig({
   plugins: [react(), ortAssetsPlugin()],
   optimizeDeps: {
-    exclude: ["onnxruntime-web"],
+    exclude: ["onnxruntime-web", "onnxruntime-web/wasm"],
   },
 });
