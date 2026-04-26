@@ -58,6 +58,7 @@ function App() {
     total: 0,
   });
   const [detectionError, setDetectionError] = useState<string | null>(null);
+  const [confThreshold, setConfThreshold] = useState(0.10);
 
   const fileKey = (file: File) =>
     `${file.name}|${file.size}|${file.lastModified}`;
@@ -280,7 +281,7 @@ function App() {
       const results: ImageFile[] = [];
       for (const img of imageFiles) {
         try {
-          const dets = await detectFromUrl(img.previewUrl);
+          const dets = await detectFromUrl(img.previewUrl, undefined, confThreshold);
           results.push({ ...img, detections: dets });
         } catch (err) {
           const message = err instanceof Error ? err.message : "Unknown error";
@@ -725,7 +726,10 @@ function App() {
             className="d-flex align-items-center gap-3"
             style={{ justifySelf: "end" }}
           >
-            <DetectionModelPanel />
+            <DetectionModelPanel
+              confThreshold={confThreshold}
+              onConfThresholdChange={setConfThreshold}
+            />
             <div className="form-check form-switch m-0">
               <input
                 className="form-check-input"

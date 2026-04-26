@@ -28,7 +28,12 @@ async function isModelCached(): Promise<boolean> {
   }
 }
 
-export default function DetectionModelPanel() {
+type Props = {
+  confThreshold: number;
+  onConfThresholdChange: (value: number) => void;
+};
+
+export default function DetectionModelPanel({ confThreshold, onConfThresholdChange }: Props) {
   const [open, setOpen] = useState(false);
   const [modelStatus, setModelStatus] = useState<ModelStatus>({
     phase: "checking",
@@ -77,7 +82,7 @@ export default function DetectionModelPanel() {
       }
 
       if ("caches" in window) {
-        const blob = new Blob(chunks, { type: "application/octet-stream" });
+        const blob = new Blob(chunks as BlobPart[], { type: "application/octet-stream" });
         const cache = await caches.open(CACHE_NAME);
         await cache.put(MODEL_URL, new Response(blob));
       }
@@ -208,6 +213,33 @@ export default function DetectionModelPanel() {
               </button>
             </div>
           )}
+
+          <hr className="my-2" />
+          <div>
+            <div className="d-flex justify-content-between align-items-center mb-1">
+              <label className="small fw-semibold text-body mb-0">
+                Confidence threshold
+              </label>
+              <span className="badge bg-secondary" style={{ fontSize: "0.65rem" }}>
+                {Math.round(confThreshold * 100)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              className="form-range"
+              min={1}
+              max={95}
+              step={1}
+              value={Math.round(confThreshold * 100)}
+              onChange={(e) =>
+                onConfThresholdChange(parseInt(e.target.value, 10) / 100)
+              }
+            />
+            <div className="d-flex justify-content-between small text-muted" style={{ marginTop: -4 }}>
+              <span>1%</span>
+              <span>95%</span>
+            </div>
+          </div>
         </div>
       )}
     </div>
