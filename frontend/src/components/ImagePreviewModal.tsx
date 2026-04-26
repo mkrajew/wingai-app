@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Check } from "lucide-react";
 import { formatBytes } from "../utils";
 import type { ImageFile, Detection } from "../App";
 
@@ -9,6 +10,7 @@ export type ImagePreviewModalProps = {
   onClose: () => void;
   onRemove: (filename: string) => void;
   onRename: (index: number, newName: string) => void;
+  onToggleDetections: (index: number) => void;
 };
 
 export default function ImagePreviewModal({
@@ -18,6 +20,7 @@ export default function ImagePreviewModal({
   onClose,
   onRemove,
   onRename,
+  onToggleDetections,
 }: ImagePreviewModalProps) {
   const previewImage =
     previewIndex === null ? null : images[previewIndex] ?? null;
@@ -26,6 +29,7 @@ export default function ImagePreviewModal({
     height: number;
   } | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const showBoxes = previewImage?.showDetections ?? true;
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -75,8 +79,8 @@ export default function ImagePreviewModal({
   );
 
   useEffect(() => {
-    drawBoxes(previewImage?.detections);
-  }, [drawBoxes, previewImage]);
+    if (showBoxes) drawBoxes(previewImage?.detections);
+  }, [drawBoxes, previewImage, showBoxes]);
 
   useEffect(() => {
     if (!previewImage) return;
@@ -227,7 +231,7 @@ export default function ImagePreviewModal({
               ref={imgRef}
               src={previewImage.previewUrl}
               alt={previewImage.filename}
-              onLoad={() => drawBoxes(previewImage.detections)}
+              onLoad={() => { if (showBoxes) drawBoxes(previewImage.detections); }}
               style={{
                 display: "block",
                 maxWidth: "100%",
@@ -235,7 +239,7 @@ export default function ImagePreviewModal({
                 objectFit: "contain",
               }}
             />
-            {previewImage.detections && previewImage.detections.length > 0 && (
+            {showBoxes && previewImage.detections && previewImage.detections.length > 0 && (
               <canvas
                 ref={canvasRef}
                 style={{
@@ -250,6 +254,22 @@ export default function ImagePreviewModal({
             )}
           </div>
         </div>
+        {previewImage.detections && previewImage.detections.length > 0 && (
+          <div className="d-flex justify-content-center">
+            <button
+              type="button"
+              className={`btn btn-sm d-flex align-items-center gap-2 ${
+                showBoxes ? "btn-success" : "btn-outline-secondary"
+              }`}
+              onClick={() => {
+                if (previewIndex !== null) onToggleDetections(previewIndex);
+              }}
+            >
+              <Check size={14} />
+              {showBoxes ? "Bounding boxes on" : "Bounding boxes off"}
+            </button>
+          </div>
+        )}
         <input
           type="text"
           className="form-control text-center fw-semibold"

@@ -16,6 +16,7 @@ type UploadImagesProps = {
   onDetect: () => void;
   isDetecting: boolean;
   detectionError: string | null;
+  onToggleDetections: (index: number) => void;
 };
 function UploadImages({
   images,
@@ -27,6 +28,7 @@ function UploadImages({
   onDetect,
   isDetecting,
   detectionError,
+  onToggleDetections,
 }: UploadImagesProps) {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [filterText, setFilterText] = useState("");
@@ -80,6 +82,7 @@ function UploadImages({
         }}
         onRemove={removeFile}
         onRename={renameFile}
+        onToggleDetections={onToggleDetections}
       />
     </>
   );
@@ -292,7 +295,9 @@ function ImageListItem({ image, onRemove, onSelect }: ImageListItemProps) {
         {image.detections !== undefined && (
           <span
             className={`badge position-absolute bottom-0 end-0 ${
-              image.detections.length > 0 ? "bg-success" : "bg-secondary"
+              image.detections.length > 0 && (image.showDetections ?? true)
+                ? "bg-success"
+                : "bg-secondary"
             }`}
             style={{ fontSize: "0.6rem" }}
           >
