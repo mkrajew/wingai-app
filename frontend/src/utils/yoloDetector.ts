@@ -25,7 +25,7 @@ export const CLASS_NAMES: string[] = ["object"];
 const CACHE_NAME = "wingai-models-v1";
 const MODEL_URL = "/models/detector.onnx";
 const INPUT_SIZE = 640;
-const DEFAULT_CONF_THRESHOLD = 0.10;
+const CONF_THRESHOLD = 0.25;
 const IOU_THRESHOLD = 0.45;
 
 // ─── Session singleton ────────────────────────────────────────────────────────
@@ -135,7 +135,6 @@ function decodeBoxes(
   padX: number,
   padY: number,
   classNames: string[],
-  confThreshold: number,
 ): Detection[] {
   const data = output.data as Float32Array;
   const [, dim1, dim2] = output.dims as [number, number, number];
@@ -169,7 +168,7 @@ function decodeBoxes(
     for (let i = 0; i < numBoxes; i++) {
       const base = i * dim2;
       const conf = data[base + 4];
-      if (conf < confThreshold) continue;
+      if (conf < CONF_THRESHOLD) continue;
 
       const x1m = data[base];
       const y1m = data[base + 1];
@@ -208,7 +207,7 @@ function decodeBoxes(
         const s = data[(4 + c) * numBoxes + i];
         if (s > maxScore) { maxScore = s; classId = c; }
       }
-      if (maxScore < confThreshold) continue;
+      if (maxScore < CONF_THRESHOLD) continue;
       detections.push(
         makeDetection(cx, cy, bw, bh, maxScore, classId, classNames, origW, origH, scale, padX, padY),
       );
@@ -224,7 +223,7 @@ function decodeBoxes(
         const s = data[base + 4 + c];
         if (s > maxScore) { maxScore = s; classId = c; }
       }
-      if (maxScore < confThreshold) continue;
+      if (maxScore < CONF_THRESHOLD) continue;
       detections.push(
         makeDetection(cx, cy, bw, bh, maxScore, classId, classNames, origW, origH, scale, padX, padY),
       );
@@ -241,7 +240,7 @@ function decodeBoxes(
         const s = obj * data[base + 5 + c];
         if (s > maxScore) { maxScore = s; classId = c; }
       }
-      if (maxScore < confThreshold) continue;
+      if (maxScore < CONF_THRESHOLD) continue;
       detections.push(
         makeDetection(cx, cy, bw, bh, maxScore, classId, classNames, origW, origH, scale, padX, padY),
       );
@@ -283,7 +282,6 @@ function nms(dets: Detection[]): Detection[] {
 export async function detectFromUrl(
   url: string,
   classNames = CLASS_NAMES,
-  confThreshold = DEFAULT_CONF_THRESHOLD,
 ): Promise<Detection[]> {
   const sess = await getSession();
 
@@ -308,6 +306,5 @@ export async function detectFromUrl(
     padX,
     padY,
     classNames,
-    confThreshold,
   );
 }

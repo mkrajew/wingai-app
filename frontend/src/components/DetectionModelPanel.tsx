@@ -28,12 +28,7 @@ async function isModelCached(): Promise<boolean> {
   }
 }
 
-type Props = {
-  confThreshold: number;
-  onConfThresholdChange: (value: number) => void;
-};
-
-export default function DetectionModelPanel({ confThreshold, onConfThresholdChange }: Props) {
+export default function DetectionModelPanel() {
   const [open, setOpen] = useState(false);
   const [modelStatus, setModelStatus] = useState<ModelStatus>({
     phase: "checking",
@@ -214,32 +209,6 @@ export default function DetectionModelPanel({ confThreshold, onConfThresholdChan
             </div>
           )}
 
-          <hr className="my-2" />
-          <div>
-            <div className="d-flex justify-content-between align-items-center mb-1">
-              <label className="small fw-semibold text-body mb-0">
-                Confidence threshold
-              </label>
-              <span className="badge bg-secondary" style={{ fontSize: "0.65rem" }}>
-                {Math.round(confThreshold * 100)}%
-              </span>
-            </div>
-            <input
-              type="range"
-              className="form-range"
-              min={1}
-              max={95}
-              step={1}
-              value={Math.round(confThreshold * 100)}
-              onChange={(e) =>
-                onConfThresholdChange(parseInt(e.target.value, 10) / 100)
-              }
-            />
-            <div className="d-flex justify-content-between small text-muted" style={{ marginTop: -4 }}>
-              <span>1%</span>
-              <span>95%</span>
-            </div>
-          </div>
         </div>
       )}
     </div>
