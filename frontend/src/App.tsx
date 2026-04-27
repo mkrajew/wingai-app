@@ -307,7 +307,7 @@ function App() {
     if (detection.inProgress) return;
     const img = imageFiles[index];
     if (!img) return;
-    setDetection({ inProgress: true, completed: 0, total: 1 });
+    setDetection({ inProgress: true, completed: 1, total: 1 });
     setDetectionError(null);
     try {
       const dets = await detectFromUrl(img.previewUrl);
@@ -779,23 +779,31 @@ function App() {
         {detection.inProgress && detection.total > 0 && (
           <div className="mb-3">
             <div className="small text-muted mb-1">
-              Detecting objects... {detection.completed}/{detection.total}
+              {detection.total === 1
+                ? "Detecting objects..."
+                : `Detecting objects... ${detection.completed}/${detection.total}`}
             </div>
             <div
               className="progress"
               role="progressbar"
-              aria-valuenow={Math.round(
-                (detection.completed / detection.total) * 100,
-              )}
+              aria-valuenow={
+                detection.total === 1
+                  ? 100
+                  : Math.round((detection.completed / detection.total) * 100)
+              }
               aria-valuemin={0}
               aria-valuemax={100}
             >
               <div
-                className="progress-bar bg-success progress-bar-striped progress-bar-animated"
+                className={`progress-bar${detection.total === 1 ? " progress-bar-animated progress-bar-striped" : ""}`}
                 style={{
-                  width: `${Math.round(
-                    (detection.completed / detection.total) * 100,
-                  )}%`,
+                  width:
+                    detection.total === 1
+                      ? "100%"
+                      : `${Math.round(
+                          (detection.completed / detection.total) * 100,
+                        )}%`,
+                  transition: "none",
                 }}
               />
             </div>
@@ -821,6 +829,7 @@ function App() {
                   width: `${Math.round(
                     (processing.completed / processing.total) * 100,
                   )}%`,
+                  transition: "none",
                 }}
               />
             </div>
