@@ -803,7 +803,6 @@ function App() {
                       : `${Math.round(
                           (detection.completed / detection.total) * 100,
                         )}%`,
-                  transition: "none",
                 }}
               />
             </div>
