@@ -25,16 +25,53 @@ export const CLASS_NAMES: string[] = ["object"];
 
 const CACHE_NAME = "wingai-models-v1";
 const MODEL_URL = "/models/detector.onnx";
-const INPUT_SIZE = 640;
+
+// Defaults chosen to match Ultralytics inference (`YOLO(...).predict(img)`):
+// - imgsz 640 (used only for dynamic-input ONNX; static-input models use their
+//   declared HxW from the model graph).
+// - stride 32 (max stride for YOLOv5/v8/v9/v11).
+// - pad color 114 (Ultralytics LetterBox default).
+// - conf 0.25, iou 0.7 (Ultralytics predict() defaults).
+const DEFAULT_IMGSZ = 640;
+const STRIDE = 32;
+const PAD_COLOR = 114;
 const CONF_THRESHOLD = 0.25;
-const IOU_THRESHOLD = 0.45;
+const IOU_THRESHOLD = 0.7;
 
 // ─── Session singleton ────────────────────────────────────────────────────────
 
-let _session: ort.InferenceSession | null = null;
+type InputShape =
+  | { kind: "static"; w: number; h: number }
+  | { kind: "dynamic" };
 
-async function getSession(): Promise<ort.InferenceSession> {
-  if (_session) return _session;
+let _session: ort.InferenceSession | null = null;
+let _inputShape: InputShape | null = null;
+
+function detectInputShape(session: ort.InferenceSession): InputShape {
+  const meta = session.inputMetadata[0];
+  if (!meta || !meta.isTensor) {
+    throw new Error("Model has no tensor input");
+  }
+  const shape = meta.shape;
+  if (shape.length !== 4) {
+    throw new Error(`Expected NCHW input (rank 4), got rank ${shape.length}`);
+  }
+  const h = shape[2];
+  const w = shape[3];
+  // Symbolic dims are strings; numeric dims are fixed sizes.
+  if (typeof h === "number" && typeof w === "number" && h > 0 && w > 0) {
+    return { kind: "static", w, h };
+  }
+  return { kind: "dynamic" };
+}
+
+async function getSession(): Promise<{
+  session: ort.InferenceSession;
+  inputShape: InputShape;
+}> {
+  if (_session && _inputShape) {
+    return { session: _session, inputShape: _inputShape };
+  }
 
   if (!("caches" in window)) throw new Error("Cache API not available.");
 
@@ -50,47 +87,185 @@ async function getSession(): Promise<ort.InferenceSession> {
   _session = await ort.InferenceSession.create(buffer, {
     executionProviders: ["wasm"],
   });
-  return _session;
+  _inputShape = detectInputShape(_session);
+  return { session: _session, inputShape: _inputShape };
 }
 
 // ─── Preprocessing ─────────────────────────────────────────────────────────────
+//
+// Mirrors ultralytics.data.augment.LetterBox with the defaults used by
+// `predict()`: center=True, scaleup=True, value=(114,114,114), interpolation
+// bilinear. When the ONNX accepts dynamic spatial dims, we also mirror
+// `auto=True`, padding only to the next multiple of `STRIDE` — this is what
+// `YOLO('model.pt').predict(img)` does on a .pt model. Static-export ONNX
+// models force a fixed input size, so we fall back to square (or whatever
+// HxW the model declares).
 
-function preprocessImage(img: HTMLImageElement): {
-  tensor: ort.Tensor;
-  scale: number;
-  padX: number;
-  padY: number;
-} {
-  const canvas = document.createElement("canvas");
-  canvas.width = INPUT_SIZE;
-  canvas.height = INPUT_SIZE;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Could not get 2D context");
+function computeLetterbox(
+  origW: number,
+  origH: number,
+  inputShape: InputShape,
+) {
+  const newW = inputShape.kind === "static" ? inputShape.w : DEFAULT_IMGSZ;
+  const newH = inputShape.kind === "static" ? inputShape.h : DEFAULT_IMGSZ;
 
-  const scale = Math.min(
-    INPUT_SIZE / img.naturalWidth,
-    INPUT_SIZE / img.naturalHeight,
+  const r = Math.min(newW / origW, newH / origH);
+  const scaledW = Math.round(origW * r);
+  const scaledH = Math.round(origH * r);
+
+  let dw = newW - scaledW;
+  let dh = newH - scaledH;
+  if (inputShape.kind === "dynamic") {
+    // auto=True: strip whole stride multiples, keep only the residual padding.
+    dw = ((dw % STRIDE) + STRIDE) % STRIDE;
+    dh = ((dh % STRIDE) + STRIDE) % STRIDE;
+  }
+
+  const targetW = scaledW + dw;
+  const targetH = scaledH + dh;
+
+  // Ultralytics' `±0.1` split keeps total padding correct when dw/dh is odd.
+  // We only need the left/top amount; right/bottom is implicit in the canvas size.
+  const padX = Math.round(dw / 2 - 0.1);
+  const padY = Math.round(dh / 2 - 0.1);
+
+  return { targetW, targetH, scaledW, scaledH, scale: r, padX, padY };
+}
+
+// Bilinear resize that matches cv2.resize(..., interpolation=cv2.INTER_LINEAR).
+// OpenCV samples source pixels using center-aligned coordinates:
+//   src_x = (dst_x + 0.5) * (src_w / dst_w) - 0.5
+//   src_y = (dst_y + 0.5) * (src_h / dst_h) - 0.5
+// with clamping to the source bounds at the edges. The default browser canvas
+// scaler does not follow this convention and can shift the result by ~1 pixel
+// at the model's output level.
+function resizeBilinearRGBA(
+  src: Uint8ClampedArray,
+  srcW: number,
+  srcH: number,
+  dstW: number,
+  dstH: number,
+): Float32Array {
+  const dst = new Float32Array(dstW * dstH * 3);
+  const scaleX = srcW / dstW;
+  const scaleY = srcH / dstH;
+
+  for (let dy = 0; dy < dstH; dy++) {
+    let sy = (dy + 0.5) * scaleY - 0.5;
+    let y0 = Math.floor(sy);
+    let wy: number;
+    if (y0 < 0) {
+      y0 = 0;
+      wy = 0;
+    } else if (y0 >= srcH - 1) {
+      y0 = srcH - 1;
+      wy = 0;
+    } else {
+      wy = sy - y0;
+    }
+    const y1 = Math.min(srcH - 1, y0 + 1);
+    const row0 = y0 * srcW;
+    const row1 = y1 * srcW;
+
+    for (let dx = 0; dx < dstW; dx++) {
+      let sx = (dx + 0.5) * scaleX - 0.5;
+      let x0 = Math.floor(sx);
+      let wx: number;
+      if (x0 < 0) {
+        x0 = 0;
+        wx = 0;
+      } else if (x0 >= srcW - 1) {
+        x0 = srcW - 1;
+        wx = 0;
+      } else {
+        wx = sx - x0;
+      }
+      const x1 = Math.min(srcW - 1, x0 + 1);
+
+      const w00 = (1 - wx) * (1 - wy);
+      const w10 = wx * (1 - wy);
+      const w01 = (1 - wx) * wy;
+      const w11 = wx * wy;
+
+      const i00 = (row0 + x0) * 4;
+      const i10 = (row0 + x1) * 4;
+      const i01 = (row1 + x0) * 4;
+      const i11 = (row1 + x1) * 4;
+
+      // Round to uint8 to match cv2.resize's intermediate output. Ultralytics
+      // does the float32 / 255 conversion only after this uint8 step, so we
+      // mirror the same quantization here.
+      const dstIdx = (dy * dstW + dx) * 3;
+      dst[dstIdx] = Math.round(
+        src[i00] * w00 + src[i10] * w10 + src[i01] * w01 + src[i11] * w11,
+      );
+      dst[dstIdx + 1] = Math.round(
+        src[i00 + 1] * w00 +
+          src[i10 + 1] * w10 +
+          src[i01 + 1] * w01 +
+          src[i11 + 1] * w11,
+      );
+      dst[dstIdx + 2] = Math.round(
+        src[i00 + 2] * w00 +
+          src[i10 + 2] * w10 +
+          src[i01 + 2] * w01 +
+          src[i11 + 2] * w11,
+      );
+    }
+  }
+  return dst;
+}
+
+function preprocessImage(
+  img: HTMLImageElement,
+  inputShape: InputShape,
+): { tensor: ort.Tensor; scale: number; padX: number; padY: number } {
+  const { targetW, targetH, scaledW, scaledH, scale, padX, padY } =
+    computeLetterbox(img.naturalWidth, img.naturalHeight, inputShape);
+
+  // Read original-resolution pixels (no canvas scaling).
+  const srcCanvas = document.createElement("canvas");
+  srcCanvas.width = img.naturalWidth;
+  srcCanvas.height = img.naturalHeight;
+  const srcCtx = srcCanvas.getContext("2d");
+  if (!srcCtx) throw new Error("Could not get 2D context");
+  srcCtx.drawImage(img, 0, 0);
+  const { data: srcData } = srcCtx.getImageData(
+    0,
+    0,
+    img.naturalWidth,
+    img.naturalHeight,
   );
-  const scaledW = Math.round(img.naturalWidth * scale);
-  const scaledH = Math.round(img.naturalHeight * scale);
-  const padX = Math.floor((INPUT_SIZE - scaledW) / 2);
-  const padY = Math.floor((INPUT_SIZE - scaledH) / 2);
 
-  ctx.fillStyle = "#808080";
-  ctx.fillRect(0, 0, INPUT_SIZE, INPUT_SIZE);
-  ctx.drawImage(img, padX, padY, scaledW, scaledH);
+  // cv2.INTER_LINEAR-style resize, then build NCHW float32 with letterbox padding.
+  const resized = resizeBilinearRGBA(
+    srcData,
+    img.naturalWidth,
+    img.naturalHeight,
+    scaledW,
+    scaledH,
+  );
 
-  const { data } = ctx.getImageData(0, 0, INPUT_SIZE, INPUT_SIZE);
-  const pixels = INPUT_SIZE * INPUT_SIZE;
+  const pixels = targetW * targetH;
   const float32 = new Float32Array(3 * pixels);
-  for (let i = 0; i < pixels; i++) {
-    float32[i] = data[i * 4] / 255;
-    float32[i + pixels] = data[i * 4 + 1] / 255;
-    float32[i + 2 * pixels] = data[i * 4 + 2] / 255;
+  const padNorm = PAD_COLOR / 255;
+  float32.fill(padNorm);
+
+  const inv255 = 1 / 255;
+  for (let y = 0; y < scaledH; y++) {
+    const dstRow = (y + padY) * targetW + padX;
+    const srcRow = y * scaledW;
+    for (let x = 0; x < scaledW; x++) {
+      const s = (srcRow + x) * 3;
+      const d = dstRow + x;
+      float32[d] = resized[s] * inv255;
+      float32[d + pixels] = resized[s + 1] * inv255;
+      float32[d + 2 * pixels] = resized[s + 2] * inv255;
+    }
   }
 
   return {
-    tensor: new ort.Tensor("float32", float32, [1, 3, INPUT_SIZE, INPUT_SIZE]),
+    tensor: new ort.Tensor("float32", float32, [1, 3, targetH, targetW]),
     scale,
     padX,
     padY,
@@ -164,7 +339,7 @@ function decodeBoxes(
 
   if (isDecodedNMS) {
     // [1, N, 6] — model includes NMS; each row: [x1,y1,x2,y2,conf,cls_id]
-    // Coordinates are in the letterboxed model input space (640×640).
+    // Coordinates are in the letterboxed model input space.
     // Unused slots are zero-padded.
     for (let i = 0; i < numBoxes; i++) {
       const base = i * dim2;
@@ -284,7 +459,7 @@ export async function detectFromUrl(
   url: string,
   classNames = CLASS_NAMES,
 ): Promise<Detection[]> {
-  const sess = await getSession();
+  const { session, inputShape } = await getSession();
 
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
@@ -293,10 +468,10 @@ export async function detectFromUrl(
     el.src = url;
   });
 
-  const { tensor, scale, padX, padY } = preprocessImage(img);
-  const feeds = { [sess.inputNames[0]]: tensor };
-  const results = await sess.run(feeds);
-  const output = results[sess.outputNames[0]];
+  const { tensor, scale, padX, padY } = preprocessImage(img, inputShape);
+  const feeds = { [session.inputNames[0]]: tensor };
+  const results = await session.run(feeds);
+  const output = results[session.outputNames[0]];
   if (!output) throw new Error("No output tensor from model");
 
   return decodeBoxes(

@@ -26,8 +26,8 @@ export type ImageFile = {
 
 type ThemeMode = "light" | "dark";
 
-const UPLOAD_MAX_EDGE = 256;
-const ENABLE_UPLOAD_RESIZE = true;
+const UPLOAD_MAX_EDGE = 400;
+const ENABLE_UPLOAD_RESIZE = false;
 const THEME_STORAGE_KEY = "wingai-theme";
 
 const getInitialTheme = (): ThemeMode => {
