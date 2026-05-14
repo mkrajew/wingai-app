@@ -42,9 +42,7 @@ def load_image(
         The image tensor.
     """
 
-    image = decode_image(filepath, mode=ImageReadMode.RGB, apply_exif_orientation=True)
+    image = decode_image(filepath, mode=ImageReadMode.GRAY, apply_exif_orientation=True)
     x_size, y_size = image.shape[2], image.shape[1]
-    # if image.shape[0] == 1:
-    #     image = image.repeat(3, 1, 1)
     image, _, _ = preprocess_func(image)
     return image, x_size, y_size

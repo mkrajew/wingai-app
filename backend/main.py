@@ -1,3 +1,5 @@
+from functools import partial
+from wings.modeling.unet import UNet
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 
@@ -5,7 +7,7 @@ import torch
 from contextlib import asynccontextmanager
 
 from wings.modeling.litnet import LitNet
-from wings.modeling.loss import DiceLoss
+from wings.modeling.loss import BCEDiceLoss
 from wings.config import MODELS_DIR
 
 from wings.utils import load_image
@@ -27,20 +29,17 @@ models = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    checkpoint_path = MODELS_DIR / "unet.ckpt"
+    kernel_size = 5
+    checkpoint_path = MODELS_DIR / f"unet-final-k{kernel_size}.ckpt"
 
-    unet_model = torch.hub.load(
-        "mateuszbuda/brain-segmentation-pytorch",
-        "unet",
-        in_channels=3,
-        out_channels=1,
-        init_features=32,
-        pretrained=False,
-        trust_repo=True,
-    )
+    unet_model = UNet(in_channels=1, out_channels=1, kernel_size=kernel_size)
     model = (
         LitNet.load_from_checkpoint(
-            checkpoint_path, model=unet_model, num_epochs=60, criterion=DiceLoss()
+            checkpoint_path,
+            model=unet_model,
+            criterion=BCEDiceLoss(),
+            num_epochs=60,
+            strict=False,
         )
         .to(device)
         .eval()
@@ -48,9 +47,12 @@ async def lifespan(app: FastAPI):
 
     mean_coords = torch.load(MODELS_DIR / "mean_shape.pth", weights_only=False)
 
+    preprocess = partial(unet_fit_rectangle_preprocess, output_size=400)
+
     models["device"] = device
     models["model"] = model
     models["shape"] = mean_coords
+    models["preprocess"] = preprocess
     yield
 
 
@@ -62,9 +64,9 @@ def root():
     return {"Hello": "WingAI"}
 
 
-def process_image(image, x_size, y_size):
+def process_image(image):
     try:
-        image_tensor, _, _ = load_image(image, unet_fit_rectangle_preprocess)
+        image_tensor, x_size, y_size = load_image(image, models["preprocess"])
     except Exception as e:
         raise LoadImageError("Failed to load image") from e
 
@@ -101,7 +103,7 @@ def process_image(image, x_size, y_size):
         check_carefully = gpa_vals.max().item() > 0.04
 
     coordinates[:, 1] = y_size - coordinates[:, 1] - 1
-    coordinates = coordinates.detach().flatten().round().long().tolist()
+    coordinates = coordinates.detach().flatten().tolist()
 
     return coordinates, check_carefully
 
@@ -111,9 +113,9 @@ async def analyze(
     file: UploadFile = File(...), x_size: int = Form(...), y_size: int = Form(...)
 ):
     raw = await file.read()
-    encoded = torch.frombuffer(raw, dtype=torch.uint8)
+    encoded = torch.frombuffer(bytearray(raw), dtype=torch.uint8)
 
-    coords, check = process_image(encoded, x_size, y_size)
+    coords, check = process_image(encoded)
     return JSONResponse(content={"coords": coords, "check": check})
 
 
