@@ -22,6 +22,7 @@ export type ImageFile = {
   error?: string;
   detections?: Detection[];
   showDetections?: boolean;
+  selectedDetectionIndex?: number;
 };
 
 type ThemeMode = "light" | "dark";
@@ -322,6 +323,14 @@ function App() {
     }
   }
 
+  function handleSelectDetection(imageIndex: number, detIndex: number) {
+    setImageFiles((prevFiles) =>
+      prevFiles.map((file, i) =>
+        i === imageIndex ? { ...file, selectedDetectionIndex: detIndex } : file,
+      ),
+    );
+  }
+
   function handleToggleDetections(index: number) {
     setImageFiles((prevFiles) =>
       prevFiles.map((file, i) =>
@@ -468,9 +477,10 @@ function App() {
       return image;
     }
 
-    const topDet = dets.reduce((best, det) =>
-      det.confidence > best.confidence ? det : best,
-    );
+    const topDet =
+      image.selectedDetectionIndex !== undefined && dets[image.selectedDetectionIndex]
+        ? dets[image.selectedDetectionIndex]
+        : dets.reduce((best, det) => det.confidence > best.confidence ? det : best);
 
     const x1 = Math.max(0, Math.round(topDet.x1));
     const y1 = Math.max(0, Math.round(topDet.y1));
@@ -847,6 +857,7 @@ function App() {
             detectionError={detectionError}
             onToggleDetections={handleToggleDetections}
             onDetectSingle={handleDetectSingle}
+            onSelectDetection={handleSelectDetection}
           />
         )}
         {step === "review" && (

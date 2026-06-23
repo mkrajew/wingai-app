@@ -18,6 +18,7 @@ type UploadImagesProps = {
   detectionError: string | null;
   onToggleDetections: (index: number) => void;
   onDetectSingle: (index: number) => void;
+  onSelectDetection: (imageIndex: number, detIndex: number) => void;
 };
 function UploadImages({
   images,
@@ -31,6 +32,7 @@ function UploadImages({
   detectionError,
   onToggleDetections,
   onDetectSingle,
+  onSelectDetection,
 }: UploadImagesProps) {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [filterText, setFilterText] = useState("");
@@ -86,6 +88,7 @@ function UploadImages({
         onRename={renameFile}
         onToggleDetections={onToggleDetections}
         onDetectSingle={onDetectSingle}
+        onSelectDetection={onSelectDetection}
         isDetecting={isDetecting}
       />
     </>

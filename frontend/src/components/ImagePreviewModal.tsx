@@ -12,6 +12,7 @@ export type ImagePreviewModalProps = {
   onRename: (index: number, newName: string) => void;
   onToggleDetections: (index: number) => void;
   onDetectSingle: (index: number) => void;
+  onSelectDetection: (imageIndex: number, detIndex: number) => void;
   isDetecting: boolean;
 };
 
@@ -24,6 +25,7 @@ export default function ImagePreviewModal({
   onRename,
   onToggleDetections,
   onDetectSingle,
+  onSelectDetection,
   isDetecting,
 }: ImagePreviewModalProps) {
   const previewImage =
@@ -40,7 +42,7 @@ export default function ImagePreviewModal({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const drawBoxes = useCallback(
-    (detections: Detection[] | undefined, hoveredIndex: number | null = null) => {
+    (detections: Detection[] | undefined, hoveredIndex: number | null = null, selectedIndex: number | null = null) => {
       const img = imgRef.current;
       const canvas = canvasRef.current;
       if (!img || !canvas || !detections || detections.length === 0) return;
@@ -59,9 +61,11 @@ export default function ImagePreviewModal({
 
       ctx.clearRect(0, 0, dispW, dispH);
 
-      const topDetection = detections.reduce((best, det) =>
-        det.confidence > best.confidence ? det : best,
+      const topIndex = detections.reduce(
+        (bestIdx, det, i) => det.confidence > detections[bestIdx].confidence ? i : bestIdx,
+        0,
       );
+      const mainIndex = selectedIndex ?? topIndex;
 
       ctx.font = "bold 12px sans-serif";
       ctx.textBaseline = "bottom";
@@ -72,7 +76,7 @@ export default function ImagePreviewModal({
         const y = det.y1 * scaleY;
         const w = (det.x2 - det.x1) * scaleX;
         const h = (det.y2 - det.y1) * scaleY;
-        const color = det === topDetection ? "#00e676" : "#2196f3";
+        const color = i === mainIndex ? "#00e676" : "#2196f3";
         const label = (det.confidence * 100).toFixed(1) + "%";
         const isHovered = i === hoveredIndex;
 
@@ -98,7 +102,7 @@ export default function ImagePreviewModal({
   );
 
   useEffect(() => {
-    if (showBoxes) drawBoxes(previewImage?.detections, hoveredDetIndex);
+    if (showBoxes) drawBoxes(previewImage?.detections, hoveredDetIndex, previewImage?.selectedDetectionIndex ?? null);
   }, [drawBoxes, previewImage, showBoxes, hoveredDetIndex]);
 
   useEffect(() => {
@@ -262,7 +266,7 @@ export default function ImagePreviewModal({
               ref={imgRef}
               src={previewImage.previewUrl}
               alt={previewImage.filename}
-              onLoad={() => { if (showBoxes) drawBoxes(previewImage.detections); }}
+              onLoad={() => { if (showBoxes) drawBoxes(previewImage.detections, null, previewImage.selectedDetectionIndex ?? null); }}
               style={{
                 display: "block",
                 maxWidth: "100%",
@@ -297,6 +301,26 @@ export default function ImagePreviewModal({
                   const newHovered = found === -1 ? null : found;
                   if (newHovered !== hoveredDetIndex) setHoveredDetIndex(newHovered);
                 }}
+                onClick={(event) => {
+                  const detections = previewImage.detections;
+                  if (!detections || !imgRef.current || previewIndex === null) return;
+                  const canvas = event.currentTarget;
+                  const rect = canvas.getBoundingClientRect();
+                  const mouseX = (event.clientX - rect.left) * (canvas.width / rect.width);
+                  const mouseY = (event.clientY - rect.top) * (canvas.height / rect.height);
+                  const scaleX = canvas.width / imgRef.current.naturalWidth;
+                  const scaleY = canvas.height / imgRef.current.naturalHeight;
+                  let found = -1;
+                  let foundDist = Infinity;
+                  for (let i = 0; i < detections.length; i++) {
+                    const det = detections[i];
+                    const cx = ((det.x1 + det.x2) / 2) * scaleX;
+                    const cy = ((det.y1 + det.y2) / 2) * scaleY;
+                    const dist = (mouseX - cx) ** 2 + (mouseY - cy) ** 2;
+                    if (dist < foundDist) { found = i; foundDist = dist; }
+                  }
+                  if (found !== -1) onSelectDetection(previewIndex, found);
+                }}
                 onMouseLeave={() => setHoveredDetIndex(null)}
                 style={{
                   position: "absolute",
@@ -304,7 +328,7 @@ export default function ImagePreviewModal({
                   left: 0,
                   width: "100%",
                   height: "100%",
-                  cursor: hoveredDetIndex !== null ? "crosshair" : "default",
+                  cursor: hoveredDetIndex !== null ? "pointer" : "default",
                 }}
               />
             )}
