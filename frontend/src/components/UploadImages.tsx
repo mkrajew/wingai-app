@@ -18,6 +18,7 @@ type UploadImagesProps = {
   detectionError: string | null;
   onToggleDetections: (index: number) => void;
   onDetectSingle: (index: number) => void;
+  onToggleSkipProcessing: (filename: string) => void;
   onSelectDetection: (imageIndex: number, detIndex: number) => void;
   onToggleDetectionExclusion: (imageIndex: number, detIndex: number) => void;
   onExtractDetections: (imageIndex: number) => void;
@@ -34,6 +35,7 @@ function UploadImages({
   detectionError,
   onToggleDetections,
   onDetectSingle,
+  onToggleSkipProcessing,
   onSelectDetection,
   onToggleDetectionExclusion,
   onExtractDetections,
@@ -71,6 +73,7 @@ function UploadImages({
         onDetect={onDetect}
         isDetecting={isDetecting}
         detectionError={detectionError}
+        onToggleSkipProcessing={onToggleSkipProcessing}
         onSelectImage={(_image, originalIndex) => {
           setPreviewIndex(originalIndex);
         }}
@@ -161,6 +164,7 @@ type ImageListProps = {
   onDetect: () => void;
   isDetecting: boolean;
   detectionError: string | null;
+  onToggleSkipProcessing: (filename: string) => void;
   onSelectImage: (image: ImageFile, index: number) => void;
   onPreviewFirst: () => void;
 };
@@ -175,6 +179,7 @@ function ImageList({
   onDetect,
   isDetecting,
   detectionError,
+  onToggleSkipProcessing,
   onSelectImage,
   onPreviewFirst,
 }: ImageListProps) {
@@ -255,6 +260,7 @@ function ImageList({
               key={`${image.filename}-${index}`}
               image={image}
               onRemove={removeFile}
+              onToggleSkipProcessing={() => onToggleSkipProcessing(image.filename)}
               onSelect={() => onSelectImage(image, index)}
             />
           ))
@@ -267,9 +273,10 @@ function ImageList({
 type ImageListItemProps = {
   image: ImageFile;
   onRemove: (filename: string) => void;
+  onToggleSkipProcessing: () => void;
   onSelect: () => void;
 };
-function ImageListItem({ image, onRemove, onSelect }: ImageListItemProps) {
+function ImageListItem({ image, onRemove, onToggleSkipProcessing, onSelect }: ImageListItemProps) {
   const width = image.width;
   const height = image.height;
   let dimensionLabel = "dimensions...";
@@ -324,6 +331,18 @@ function ImageListItem({ image, onRemove, onSelect }: ImageListItemProps) {
           {formatBytes(image.file.size)} • {dimensionLabel}
         </div>
       </div>
+      <button
+        type="button"
+        className={`btn btn-sm py-0 px-1 ${image.skipProcessing ? "btn-outline-secondary" : "btn-outline-success"}`}
+        style={{ fontSize: "0.65rem", whiteSpace: "nowrap" }}
+        title={image.skipProcessing ? "Excluded from processing — click to include" : "Included in processing — click to exclude"}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleSkipProcessing();
+        }}
+      >
+        {image.skipProcessing ? "Skip" : "Process"}
+      </button>
       <button
         type="button"
         className="btn btn-close"

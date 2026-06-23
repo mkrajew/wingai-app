@@ -24,6 +24,7 @@ export type ImageFile = {
   showDetections?: boolean;
   selectedDetectionIndex?: number;
   excludedDetections?: number[];
+  skipProcessing?: boolean;
 };
 
 type ThemeMode = "light" | "dark";
@@ -324,6 +325,14 @@ function App() {
     }
   }
 
+  function handleToggleSkipProcessing(filename: string) {
+    setImageFiles((prev) =>
+      prev.map((f) =>
+        f.filename === filename ? { ...f, skipProcessing: !f.skipProcessing } : f,
+      ),
+    );
+  }
+
   function handleToggleDetectionExclusion(imageIndex: number, detIndex: number) {
     setImageFiles((prevFiles) =>
       prevFiles.map((file, i) => {
@@ -385,7 +394,10 @@ function App() {
     }
 
     if (newFiles.length > 0) {
-      setImageFiles((prev) => [...prev, ...newFiles]);
+      setImageFiles((prev) => [
+        ...prev.map((f, i) => (i === imageIndex ? { ...f, skipProcessing: true } : f)),
+        ...newFiles,
+      ]);
     }
   }
 
@@ -679,12 +691,15 @@ function App() {
   }
 
   async function processImages() {
+    const toProcess = imageFiles.filter((f) => !f.skipProcessing);
+    if (toProcess.length === 0) return;
+
+    setImageFiles(toProcess);
     setStep("review");
     setReviewIndex(0);
 
-    const updated = await processImagesWithBackend(imageFiles);
-
-    setImageFiles(updated);
+    const processed = await processImagesWithBackend(toProcess);
+    setImageFiles(processed);
   }
 
   async function addFilesForReview(files: File[]) {
@@ -924,6 +939,7 @@ function App() {
             onToggleDetections={handleToggleDetections}
             onDetectSingle={handleDetectSingle}
             onSelectDetection={handleSelectDetection}
+            onToggleSkipProcessing={handleToggleSkipProcessing}
             onToggleDetectionExclusion={handleToggleDetectionExclusion}
             onExtractDetections={handleExtractDetections}
           />
