@@ -33,13 +33,14 @@ export default function ImagePreviewModal({
     height: number;
   } | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [hoveredDetIndex, setHoveredDetIndex] = useState<number | null>(null);
   const showBoxes = previewImage?.showDetections ?? true;
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const drawBoxes = useCallback(
-    (detections: Detection[] | undefined) => {
+    (detections: Detection[] | undefined, hoveredIndex: number | null = null) => {
       const img = imgRef.current;
       const canvas = canvasRef.current;
       if (!img || !canvas || !detections || detections.length === 0) return;
@@ -61,23 +62,48 @@ export default function ImagePreviewModal({
       const topDetection = detections.reduce((best, det) =>
         det.confidence > best.confidence ? det : best,
       );
-      for (const det of [topDetection]) {
+
+      ctx.font = "bold 12px sans-serif";
+      ctx.textBaseline = "bottom";
+
+      for (let i = 0; i < detections.length; i++) {
+        const det = detections[i];
         const x = det.x1 * scaleX;
         const y = det.y1 * scaleY;
         const w = (det.x2 - det.x1) * scaleX;
         const h = (det.y2 - det.y1) * scaleY;
+        const color = det === topDetection ? "#00e676" : "#2196f3";
+        const label = (det.confidence * 100).toFixed(1) + "%";
+        const isHovered = i === hoveredIndex;
 
-        ctx.strokeStyle = "#00e676";
-        ctx.lineWidth = 2;
+        if (isHovered) {
+          ctx.fillStyle = color + "33";
+          ctx.fillRect(x, y, w, h);
+        }
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = isHovered ? 3 : 2;
         ctx.strokeRect(x, y, w, h);
+
+        const textW = ctx.measureText(label).width;
+        const labelX = x;
+        const labelY = y > 16 ? y : y + h + 16;
+        ctx.fillStyle = color;
+        ctx.fillRect(labelX, labelY - 16, textW + 6, 16);
+        ctx.fillStyle = "#000";
+        ctx.fillText(label, labelX + 3, labelY);
       }
     },
     [],
   );
 
   useEffect(() => {
-    if (showBoxes) drawBoxes(previewImage?.detections);
-  }, [drawBoxes, previewImage, showBoxes]);
+    if (showBoxes) drawBoxes(previewImage?.detections, hoveredDetIndex);
+  }, [drawBoxes, previewImage, showBoxes, hoveredDetIndex]);
+
+  useEffect(() => {
+    setHoveredDetIndex(null);
+  }, [previewImage?.previewUrl]);
 
   useEffect(() => {
     if (!previewImage) return;
@@ -247,13 +273,39 @@ export default function ImagePreviewModal({
             {showBoxes && previewImage.detections && previewImage.detections.length > 0 && (
               <canvas
                 ref={canvasRef}
+                onMouseMove={(event) => {
+                  const detections = previewImage.detections;
+                  if (!detections || !imgRef.current) return;
+                  const canvas = event.currentTarget;
+                  const rect = canvas.getBoundingClientRect();
+                  const mouseX = (event.clientX - rect.left) * (canvas.width / rect.width);
+                  const mouseY = (event.clientY - rect.top) * (canvas.height / rect.height);
+                  const scaleX = canvas.width / imgRef.current.naturalWidth;
+                  const scaleY = canvas.height / imgRef.current.naturalHeight;
+                  let found = -1;
+                  for (let i = 0; i < detections.length; i++) {
+                    const det = detections[i];
+                    if (
+                      mouseX >= det.x1 * scaleX &&
+                      mouseX <= det.x2 * scaleX &&
+                      mouseY >= det.y1 * scaleY &&
+                      mouseY <= det.y2 * scaleY
+                    ) {
+                      found = i;
+                      break;
+                    }
+                  }
+                  const newHovered = found === -1 ? null : found;
+                  if (newHovered !== hoveredDetIndex) setHoveredDetIndex(newHovered);
+                }}
+                onMouseLeave={() => setHoveredDetIndex(null)}
                 style={{
                   position: "absolute",
                   top: 0,
                   left: 0,
                   width: "100%",
                   height: "100%",
-                  pointerEvents: "none",
+                  cursor: hoveredDetIndex !== null ? "crosshair" : "default",
                 }}
               />
             )}
@@ -346,7 +398,7 @@ export default function ImagePreviewModal({
               }}
             >
               <Check size={14} />
-              {showBoxes ? "Bounding box on" : "Bounding box off"}
+              {showBoxes ? "Bounding boxes on" : "Bounding boxes off"}
             </button>
           ) : (
             <div />
