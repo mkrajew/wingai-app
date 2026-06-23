@@ -283,16 +283,15 @@ export default function ImagePreviewModal({
                   const scaleX = canvas.width / imgRef.current.naturalWidth;
                   const scaleY = canvas.height / imgRef.current.naturalHeight;
                   let found = -1;
+                  let foundDist = Infinity;
                   for (let i = 0; i < detections.length; i++) {
                     const det = detections[i];
-                    if (
-                      mouseX >= det.x1 * scaleX &&
-                      mouseX <= det.x2 * scaleX &&
-                      mouseY >= det.y1 * scaleY &&
-                      mouseY <= det.y2 * scaleY
-                    ) {
+                    const cx = ((det.x1 + det.x2) / 2) * scaleX;
+                    const cy = ((det.y1 + det.y2) / 2) * scaleY;
+                    const dist = (mouseX - cx) ** 2 + (mouseY - cy) ** 2;
+                    if (dist < foundDist) {
                       found = i;
-                      break;
+                      foundDist = dist;
                     }
                   }
                   const newHovered = found === -1 ? null : found;

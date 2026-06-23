@@ -35,7 +35,7 @@ const MODEL_URL = "/models/detector.onnx";
 const DEFAULT_IMGSZ = 640;
 const STRIDE = 32;
 const PAD_COLOR = 114;
-const CONF_THRESHOLD = 0;
+const CONF_THRESHOLD = 0.05;
 const IOU_THRESHOLD = 0.7;
 
 // ─── Session singleton ────────────────────────────────────────────────────────
