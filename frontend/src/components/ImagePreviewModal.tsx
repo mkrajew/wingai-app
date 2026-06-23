@@ -17,6 +17,7 @@ export type ImagePreviewModalProps = {
   onSelectDetection: (imageIndex: number, detIndex: number) => void;
   onToggleDetectionExclusion: (imageIndex: number, detIndex: number) => void;
   onExtractDetections: (imageIndex: number) => void;
+  onToggleSkipProcessing: (filename: string) => void;
   isDetecting: boolean;
 };
 
@@ -32,6 +33,7 @@ export default function ImagePreviewModal({
   onSelectDetection,
   onToggleDetectionExclusion,
   onExtractDetections,
+  onToggleSkipProcessing,
   isDetecting,
 }: ImagePreviewModalProps) {
   const previewImage =
@@ -416,7 +418,14 @@ export default function ImagePreviewModal({
             ? previewImage.file.type.replace(/^image\//, "")
             : "unknown type"}
         </div>
-        <div className="d-flex justify-content-end">
+        <div className="d-flex justify-content-between align-items-center">
+          <button
+            type="button"
+            className={`btn btn-sm ${previewImage.skipProcessing ? "btn-outline-secondary" : "btn-outline-success"}`}
+            onClick={() => onToggleSkipProcessing(previewImage.filename)}
+          >
+            {previewImage.skipProcessing ? "Skip" : "Process"}
+          </button>
           <button
             type="button"
             className="btn btn-outline-danger"

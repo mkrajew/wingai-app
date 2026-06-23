@@ -98,6 +98,7 @@ function UploadImages({
         onSelectDetection={onSelectDetection}
         onToggleDetectionExclusion={onToggleDetectionExclusion}
         onExtractDetections={onExtractDetections}
+        onToggleSkipProcessing={onToggleSkipProcessing}
         isDetecting={isDetecting}
       />
     </>
