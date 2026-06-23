@@ -23,6 +23,7 @@ export type ImageFile = {
   detections?: Detection[];
   showDetections?: boolean;
   selectedDetectionIndex?: number;
+  excludedDetections?: number[];
 };
 
 type ThemeMode = "light" | "dark";
@@ -320,6 +321,71 @@ function App() {
       setDetectionError(message);
     } finally {
       setDetection({ inProgress: false, completed: 1, total: 1 });
+    }
+  }
+
+  function handleToggleDetectionExclusion(imageIndex: number, detIndex: number) {
+    setImageFiles((prevFiles) =>
+      prevFiles.map((file, i) => {
+        if (i !== imageIndex) return file;
+        const excluded = new Set(file.excludedDetections ?? []);
+        if (excluded.has(detIndex)) excluded.delete(detIndex);
+        else excluded.add(detIndex);
+        return { ...file, excludedDetections: [...excluded] };
+      }),
+    );
+  }
+
+  async function handleExtractDetections(imageIndex: number) {
+    const image = imageFiles[imageIndex];
+    if (!image?.detections || image.detections.length === 0) return;
+
+    const excluded = new Set(image.excludedDetections ?? []);
+    const toExtract = image.detections
+      .map((det, i) => ({ det, i }))
+      .filter(({ i }) => !excluded.has(i));
+
+    if (toExtract.length === 0) return;
+
+    const baseName = image.filename.replace(/\.[^.]+$/, "");
+    const srcImg = await loadImage(image.previewUrl);
+    const used = new Set(imageFiles.map((f) => f.filename.toLowerCase()));
+    const newFiles: ImageFile[] = [];
+
+    for (let n = 0; n < toExtract.length; n++) {
+      const { det } = toExtract[n];
+      const x1 = Math.max(0, Math.round(det.x1));
+      const y1 = Math.max(0, Math.round(det.y1));
+      const cropW = Math.max(1, Math.round(det.x2) - x1);
+      const cropH = Math.max(1, Math.round(det.y2) - y1);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = cropW;
+      canvas.height = cropH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) continue;
+      ctx.drawImage(srcImg, x1, y1, cropW, cropH, 0, 0, cropW, cropH);
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Crop failed"))), "image/png");
+      });
+
+      const desiredName = `${baseName}_wing_${n + 1}.png`;
+      const filename = ensureUniqueFilenameFromSet(desiredName, used);
+      const file = new File([blob], filename, { type: "image/png", lastModified: Date.now() });
+
+      newFiles.push({
+        filename,
+        file,
+        previewUrl: URL.createObjectURL(blob),
+        status: "new",
+        width: cropW,
+        height: cropH,
+      });
+    }
+
+    if (newFiles.length > 0) {
+      setImageFiles((prev) => [...prev, ...newFiles]);
     }
   }
 
@@ -858,6 +924,8 @@ function App() {
             onToggleDetections={handleToggleDetections}
             onDetectSingle={handleDetectSingle}
             onSelectDetection={handleSelectDetection}
+            onToggleDetectionExclusion={handleToggleDetectionExclusion}
+            onExtractDetections={handleExtractDetections}
           />
         )}
         {step === "review" && (

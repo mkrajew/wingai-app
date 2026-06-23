@@ -3,6 +3,8 @@ import { Check } from "lucide-react";
 import { formatBytes } from "../utils";
 import type { ImageFile, Detection } from "../App";
 
+const CHECKBOX_SIZE = 14;
+
 export type ImagePreviewModalProps = {
   images: ImageFile[];
   previewIndex: number | null;
@@ -13,6 +15,8 @@ export type ImagePreviewModalProps = {
   onToggleDetections: (index: number) => void;
   onDetectSingle: (index: number) => void;
   onSelectDetection: (imageIndex: number, detIndex: number) => void;
+  onToggleDetectionExclusion: (imageIndex: number, detIndex: number) => void;
+  onExtractDetections: (imageIndex: number) => void;
   isDetecting: boolean;
 };
 
@@ -26,6 +30,8 @@ export default function ImagePreviewModal({
   onToggleDetections,
   onDetectSingle,
   onSelectDetection,
+  onToggleDetectionExclusion,
+  onExtractDetections,
   isDetecting,
 }: ImagePreviewModalProps) {
   const previewImage =
@@ -43,7 +49,13 @@ export default function ImagePreviewModal({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const drawBoxes = useCallback(
-    (detections: Detection[] | undefined, hoveredIndex: number | null = null, selectedIndex: number | null = null, showConf = true) => {
+    (
+      detections: Detection[] | undefined,
+      hoveredIndex: number | null = null,
+      selectedIndex: number | null = null,
+      showConf = true,
+      excluded: ReadonlySet<number> = new Set(),
+    ) => {
       const img = imgRef.current;
       const canvas = canvasRef.current;
       if (!img || !canvas || !detections || detections.length === 0) return;
@@ -62,11 +74,14 @@ export default function ImagePreviewModal({
 
       ctx.clearRect(0, 0, dispW, dispH);
 
-      const topIndex = detections.reduce(
-        (bestIdx, det, i) => det.confidence > detections[bestIdx].confidence ? i : bestIdx,
-        0,
+      const includedIndices = detections.map((_, i) => i).filter(i => !excluded.has(i));
+      if (includedIndices.length === 0) return;
+
+      const topIndex = includedIndices.reduce((best, i) =>
+        detections[i].confidence > detections[best].confidence ? i : best,
+        includedIndices[0],
       );
-      const mainIndex = selectedIndex ?? topIndex;
+      const mainIndex = selectedIndex !== null && !excluded.has(selectedIndex) ? selectedIndex : topIndex;
 
       ctx.font = "bold 12px sans-serif";
       ctx.textBaseline = "bottom";
@@ -77,35 +92,60 @@ export default function ImagePreviewModal({
         const y = det.y1 * scaleY;
         const w = (det.x2 - det.x1) * scaleX;
         const h = (det.y2 - det.y1) * scaleY;
-        const color = i === mainIndex ? "#00e676" : "#2196f3";
-        const label = (det.confidence * 100).toFixed(1) + "%";
+        const isExcluded = excluded.has(i);
+        const color = isExcluded ? "#888888" : (i === mainIndex ? "#00e676" : "#2196f3");
         const isHovered = i === hoveredIndex;
 
-        if (isHovered) {
+        if (isHovered && !isExcluded) {
           ctx.fillStyle = color + "33";
           ctx.fillRect(x, y, w, h);
         }
 
+        ctx.globalAlpha = isExcluded ? 0.45 : 1.0;
+        ctx.setLineDash(isExcluded ? [5, 4] : []);
         ctx.strokeStyle = color;
-        ctx.lineWidth = isHovered ? 3 : 2;
+        ctx.lineWidth = isHovered && !isExcluded ? 3 : 2;
         ctx.strokeRect(x, y, w, h);
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1.0;
 
-        if (showConf) {
+        if (showConf && !isExcluded) {
+          const label = (det.confidence * 100).toFixed(1) + "%";
           const textW = ctx.measureText(label).width;
           const labelX = x;
-          const labelY = y > 16 ? y : y + h + 16;
+          const labelY = y > CHECKBOX_SIZE ? y : y + h + CHECKBOX_SIZE;
           ctx.fillStyle = color;
-          ctx.fillRect(labelX, labelY - 16, textW + 6, 16);
+          ctx.fillRect(labelX, labelY - CHECKBOX_SIZE, textW + 6, CHECKBOX_SIZE);
           ctx.fillStyle = "#000";
           ctx.fillText(label, labelX + 3, labelY);
         }
+
+        // Checkbox in top-right corner of each box
+        const cbX = x + w - CHECKBOX_SIZE;
+        const cbY = y;
+        ctx.fillStyle = isExcluded ? "rgba(80,80,80,0.85)" : color;
+        ctx.fillRect(cbX, cbY, CHECKBOX_SIZE, CHECKBOX_SIZE);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (isExcluded) {
+          ctx.moveTo(cbX + 3, cbY + 3);
+          ctx.lineTo(cbX + CHECKBOX_SIZE - 3, cbY + CHECKBOX_SIZE - 3);
+          ctx.moveTo(cbX + CHECKBOX_SIZE - 3, cbY + 3);
+          ctx.lineTo(cbX + 3, cbY + CHECKBOX_SIZE - 3);
+        } else {
+          ctx.moveTo(cbX + 2, cbY + CHECKBOX_SIZE / 2);
+          ctx.lineTo(cbX + CHECKBOX_SIZE / 2 - 1, cbY + CHECKBOX_SIZE - 3);
+          ctx.lineTo(cbX + CHECKBOX_SIZE - 2, cbY + 2);
+        }
+        ctx.stroke();
       }
     },
     [],
   );
 
   useEffect(() => {
-    if (showBoxes) drawBoxes(previewImage?.detections, hoveredDetIndex, previewImage?.selectedDetectionIndex ?? null, showConfidence);
+    if (showBoxes) drawBoxes(previewImage?.detections, hoveredDetIndex, previewImage?.selectedDetectionIndex ?? null, showConfidence, new Set(previewImage?.excludedDetections ?? []));
   }, [drawBoxes, previewImage, showBoxes, hoveredDetIndex, showConfidence]);
 
   useEffect(() => {
@@ -269,7 +309,7 @@ export default function ImagePreviewModal({
               ref={imgRef}
               src={previewImage.previewUrl}
               alt={previewImage.filename}
-              onLoad={() => { if (showBoxes) drawBoxes(previewImage.detections, null, previewImage.selectedDetectionIndex ?? null, showConfidence); }}
+              onLoad={() => { if (showBoxes) drawBoxes(previewImage.detections, null, previewImage.selectedDetectionIndex ?? null, showConfidence, new Set(previewImage.excludedDetections ?? [])); }}
               style={{
                 display: "block",
                 maxWidth: "100%",
@@ -313,6 +353,21 @@ export default function ImagePreviewModal({
                   const mouseY = (event.clientY - rect.top) * (canvas.height / rect.height);
                   const scaleX = canvas.width / imgRef.current.naturalWidth;
                   const scaleY = canvas.height / imgRef.current.naturalHeight;
+
+                  // Check checkbox clicks first
+                  for (let i = 0; i < detections.length; i++) {
+                    const det = detections[i];
+                    const x = det.x1 * scaleX;
+                    const y = det.y1 * scaleY;
+                    const w = (det.x2 - det.x1) * scaleX;
+                    const cbX = x + w - CHECKBOX_SIZE;
+                    if (mouseX >= cbX && mouseX <= cbX + CHECKBOX_SIZE && mouseY >= y && mouseY <= y + CHECKBOX_SIZE) {
+                      onToggleDetectionExclusion(previewIndex, i);
+                      return;
+                    }
+                  }
+
+                  // Otherwise select main by closest center
                   let found = -1;
                   let foundDist = Infinity;
                   for (let i = 0; i < detections.length; i++) {
@@ -434,6 +489,15 @@ export default function ImagePreviewModal({
                   onClick={() => setShowConfidence((prev) => !prev)}
                 >
                   {showConfidence ? "Confidence on" : "Confidence off"}
+                </button>
+              )}
+              {showBoxes && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-primary"
+                  onClick={() => { if (previewIndex !== null) onExtractDetections(previewIndex); }}
+                >
+                  Extract wings
                 </button>
               )}
             </div>
