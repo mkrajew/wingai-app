@@ -97,7 +97,7 @@ export default function ImagePreviewModal({
         const w = (det.x2 - det.x1) * scaleX;
         const h = (det.y2 - det.y1) * scaleY;
         const isExcluded = excluded.has(i);
-        const color = isExcluded ? "#888888" : (i === mainIndex ? "#00e676" : "#2196f3");
+        const color = isExcluded ? "#aaaaaa" : (i === mainIndex ? "#00e676" : "#2196f3");
         const isHovered = i === hoveredIndex;
 
         if (isHovered && !isExcluded) {
@@ -105,7 +105,7 @@ export default function ImagePreviewModal({
           ctx.fillRect(x, y, w, h);
         }
 
-        ctx.globalAlpha = isExcluded ? 0.45 : 1.0;
+        ctx.globalAlpha = isExcluded ? 0.8 : 1.0;
         ctx.setLineDash(isExcluded ? [5, 4] : []);
         ctx.strokeStyle = color;
         ctx.lineWidth = isHovered && !isExcluded ? 3 : 2;
@@ -113,21 +113,20 @@ export default function ImagePreviewModal({
         ctx.setLineDash([]);
         ctx.globalAlpha = 1.0;
 
+        const anchorY = y > CHECKBOX_SIZE ? y : y + h + CHECKBOX_SIZE;
+        const cbX = x;
+        const cbY = anchorY - CHECKBOX_SIZE;
+
         if (showConf && !isExcluded) {
           const label = (det.confidence * 100).toFixed(1) + "%";
           const textW = ctx.measureText(label).width;
-          const labelX = x;
-          const labelY = y > CHECKBOX_SIZE ? y : y + h + CHECKBOX_SIZE;
           ctx.fillStyle = color;
-          ctx.fillRect(labelX, labelY - CHECKBOX_SIZE, textW + 6, CHECKBOX_SIZE);
+          ctx.fillRect(cbX + CHECKBOX_SIZE, cbY, textW + 6, CHECKBOX_SIZE);
           ctx.fillStyle = "#000";
-          ctx.fillText(label, labelX + 3, labelY);
+          ctx.fillText(label, cbX + CHECKBOX_SIZE + 3, anchorY);
         }
 
-        // Checkbox in top-right corner of each box
-        const cbX = x + w - CHECKBOX_SIZE;
-        const cbY = y;
-        ctx.fillStyle = isExcluded ? "rgba(80,80,80,0.85)" : color;
+        ctx.fillStyle = isExcluded ? "rgba(140,140,140,0.95)" : color;
         ctx.fillRect(cbX, cbY, CHECKBOX_SIZE, CHECKBOX_SIZE);
         ctx.strokeStyle = "#fff";
         ctx.lineWidth = 1.5;
@@ -374,9 +373,11 @@ export default function ImagePreviewModal({
                     const det = detections[i];
                     const x = det.x1 * scaleX;
                     const y = det.y1 * scaleY;
-                    const w = (det.x2 - det.x1) * scaleX;
-                    const cbX = x + w - CHECKBOX_SIZE;
-                    if (mouseX >= cbX && mouseX <= cbX + CHECKBOX_SIZE && mouseY >= y && mouseY <= y + CHECKBOX_SIZE) {
+                    const h = (det.y2 - det.y1) * scaleY;
+                    const anchorY = y > CHECKBOX_SIZE ? y : y + h + CHECKBOX_SIZE;
+                    const cbX = x;
+                    const cbY = anchorY - CHECKBOX_SIZE;
+                    if (mouseX >= cbX && mouseX <= cbX + CHECKBOX_SIZE && mouseY >= cbY && mouseY <= cbY + CHECKBOX_SIZE) {
                       onToggleDetectionExclusion(previewIndex, i);
                       return;
                     }

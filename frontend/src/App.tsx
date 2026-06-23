@@ -388,7 +388,8 @@ function App() {
         const excluded = new Set(file.excludedDetections ?? []);
         if (excluded.has(detIndex)) excluded.delete(detIndex);
         else excluded.add(detIndex);
-        return { ...file, excludedDetections: [...excluded] };
+        const allExcluded = (file.detections ?? []).every((_, idx) => excluded.has(idx));
+        return { ...file, excludedDetections: [...excluded], ...(allExcluded ? { showDetections: false } : {}) };
       }),
     );
   }
@@ -459,11 +460,15 @@ function App() {
 
   function handleToggleDetections(index: number) {
     setImageFiles((prevFiles) =>
-      prevFiles.map((file, i) =>
-        i === index
-          ? { ...file, showDetections: !(file.showDetections ?? true) }
-          : file,
-      ),
+      prevFiles.map((file, i) => {
+        if (i !== index) return file;
+        const turningOn = !(file.showDetections ?? true);
+        return {
+          ...file,
+          showDetections: turningOn,
+          ...(turningOn ? { excludedDetections: [] } : {}),
+        };
+      }),
     );
   }
 
