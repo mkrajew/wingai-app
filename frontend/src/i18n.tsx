@@ -275,7 +275,7 @@ const pl: Translations = {
   confidenceOff: "Pewność wyłączona",
   extractWings: "Wyodrębnij skrzydła",
   skipProcessing: "Pomiń",
-  processImage: "Przetwórz",
+  processImage: "Przetwarzaj",
   flipHorizontal: "↔ Odwróć poziomo",
   flipVertical: "↕ Odwróć pionowo",
 
