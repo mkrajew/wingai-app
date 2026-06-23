@@ -217,6 +217,16 @@ export default function ImagePreviewModal({
         return;
       }
 
+      if (!isEditingName && (event.key === "h" || event.key === "H")) {
+        if (previewIndex !== null) onFlipImage(previewIndex, "horizontal");
+        return;
+      }
+
+      if (!isEditingName && (event.key === "v" || event.key === "V")) {
+        if (previewIndex !== null) onFlipImage(previewIndex, "vertical");
+        return;
+      }
+
       if (event.key === "Escape") {
         onClose();
       } else if (event.key === "Delete") {
@@ -245,6 +255,7 @@ export default function ImagePreviewModal({
   }, [
     images.length,
     onClose,
+    onFlipImage,
     onPreviewIndexChange,
     onRemove,
     onToggleDetections,
