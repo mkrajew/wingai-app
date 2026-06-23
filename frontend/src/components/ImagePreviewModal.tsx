@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { formatBytes } from "../utils";
 import type { ImageFile, Detection } from "../App";
+import { useT } from "../i18n";
 
 const CHECKBOX_SIZE = 14;
 
@@ -38,6 +39,7 @@ export default function ImagePreviewModal({
   onToggleSkipProcessing,
   isDetecting,
 }: ImagePreviewModalProps) {
+  const t = useT();
   const previewImage =
     previewIndex === null ? null : images[previewIndex] ?? null;
   const [previewDimensions, setPreviewDimensions] = useState<{
@@ -307,7 +309,7 @@ export default function ImagePreviewModal({
         <div className="text-center text-muted">
           {previewIndex === null
             ? ""
-            : `Image ${previewIndex + 1} of ${images.length}`}
+            : t.imagePreviewOf(previewIndex + 1, images.length)}
         </div>
         <div
           style={{
@@ -425,12 +427,12 @@ export default function ImagePreviewModal({
           {formatBytes(previewImage.file.size)}
           {" • "}
           {previewDimensions
-            ? `${previewDimensions.width}×${previewDimensions.height}px`
-            : "Wymiary: ..."}
+            ? t.dimensionsPx(previewDimensions.width, previewDimensions.height)
+            : t.dimensionsLoading}
           {" • "}
           {previewImage.file.type
             ? previewImage.file.type.replace(/^image\//, "")
-            : "unknown type"}
+            : t.unknownType}
         </div>
         <div className="d-flex justify-content-between align-items-center">
           <div className="d-flex gap-2">
@@ -439,23 +441,23 @@ export default function ImagePreviewModal({
               className={`btn btn-sm ${previewImage.skipProcessing ? "btn-outline-secondary" : "btn-outline-success"}`}
               onClick={() => onToggleSkipProcessing(previewImage.filename)}
             >
-              {previewImage.skipProcessing ? "Skip" : "Process"}
+              {previewImage.skipProcessing ? t.skipProcessing : t.processImage}
             </button>
             <button
               type="button"
               className="btn btn-sm btn-outline-secondary"
-              title="Flip horizontal"
+              title={t.flipHorizontal}
               onClick={() => { if (previewIndex !== null) onFlipImage(previewIndex, "horizontal"); }}
             >
-              ↔ Flip H
+              {t.flipHorizontal}
             </button>
             <button
               type="button"
               className="btn btn-sm btn-outline-secondary"
-              title="Flip vertical"
+              title={t.flipVertical}
               onClick={() => { if (previewIndex !== null) onFlipImage(previewIndex, "vertical"); }}
             >
-              ↕ Flip V
+              {t.flipVertical}
             </button>
           </div>
           <button
@@ -475,7 +477,7 @@ export default function ImagePreviewModal({
               }
             }}
           >
-            Delete
+            {t.delete}
           </button>
         </div>
         <div className="d-flex justify-content-between align-items-center gap-2">
@@ -489,7 +491,7 @@ export default function ImagePreviewModal({
                 : onPreviewIndexChange(Math.max(0, previewIndex - 1))
             }
           >
-            Previous
+            {t.previous}
           </button>
           {previewImage.detections === undefined ? (
             <button
@@ -507,7 +509,7 @@ export default function ImagePreviewModal({
                   aria-hidden="true"
                 />
               )}
-              Detect
+              {t.detect}
             </button>
           ) : previewImage.detections.length > 0 ? (
             <div className="d-flex align-items-center gap-2">
@@ -521,7 +523,7 @@ export default function ImagePreviewModal({
                 }}
               >
                 <Check size={14} />
-                {showBoxes ? "Bounding boxes on" : "Bounding boxes off"}
+                {showBoxes ? t.boundingBoxesOn : t.boundingBoxesOff}
               </button>
               {showBoxes && (
                 <button
@@ -529,7 +531,7 @@ export default function ImagePreviewModal({
                   className={`btn btn-sm ${showConfidence ? "btn-success" : "btn-outline-secondary"}`}
                   onClick={() => setShowConfidence((prev) => !prev)}
                 >
-                  {showConfidence ? "Confidence on" : "Confidence off"}
+                  {showConfidence ? t.confidenceOn : t.confidenceOff}
                 </button>
               )}
               {showBoxes && (
@@ -538,7 +540,7 @@ export default function ImagePreviewModal({
                   className="btn btn-sm btn-outline-primary"
                   onClick={() => { if (previewIndex !== null) onExtractDetections(previewIndex); }}
                 >
-                  Extract wings
+                  {t.extractWings}
                 </button>
               )}
             </div>
@@ -557,7 +559,7 @@ export default function ImagePreviewModal({
                   )
             }
           >
-            Next
+            {t.next}
           </button>
         </div>
       </div>

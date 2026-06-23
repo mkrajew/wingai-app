@@ -3,8 +3,10 @@ import UploadImages from "./components/UploadImages";
 import ReviewImages from "./components/ReviewImages";
 import DetectionModelPanel from "./components/DetectionModelPanel";
 import HelpPanel from "./components/HelpPanel";
+import LanguageSwitcher from "./components/LanguageSwitcher";
 import { detectFromUrl } from "./utils/yoloDetector";
 import type { Detection } from "./utils/yoloDetector";
+import { useT } from "./i18n";
 
 export default App;
 
@@ -44,6 +46,7 @@ const getInitialTheme = (): ThemeMode => {
 };
 
 function App() {
+  const t = useT();
   const [imageFiles, setImageFiles] = useState<ImageFile[]>([]);
   const [step, setStep] = useState<"upload" | "review">("upload");
   const [reviewIndex, setReviewIndex] = useState(0);
@@ -893,13 +896,14 @@ function App() {
               role="status"
               style={{ justifySelf: "center" }}
             >
-              Download in progress...
+              {t.downloadInProgress}
             </div>
           )}
           <div
             className="d-flex align-items-center gap-3"
             style={{ justifySelf: "end" }}
           >
+            <LanguageSwitcher />
             <HelpPanel />
             <DetectionModelPanel />
             <div className="form-check form-switch m-0">
@@ -915,7 +919,7 @@ function App() {
                 aria-label="Toggle dark mode"
               />
               <label className="form-check-label small" htmlFor="theme-switch">
-                Dark mode
+                {t.darkMode}
               </label>
             </div>
           </div>
@@ -924,8 +928,8 @@ function App() {
           <div className="mb-3">
             <div className="small text-muted mb-1">
               {detection.total === 1
-                ? "Detecting objects..."
-                : `Detecting objects... ${detection.completed}/${detection.total}`}
+                ? t.detectingObjects
+                : t.detectingObjectsProgress(detection.completed, detection.total)}
             </div>
             <div
               className="progress"
@@ -955,7 +959,7 @@ function App() {
         {processing.inProgress && processing.total > 0 && (
           <div className="mb-3">
             <div className="small text-muted mb-1">
-              Processing images... {processing.completed}/{processing.total}
+              {t.processingImages(processing.completed, processing.total)}
             </div>
             <div
               className="progress"
