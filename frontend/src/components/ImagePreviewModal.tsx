@@ -36,13 +36,14 @@ export default function ImagePreviewModal({
   } | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [hoveredDetIndex, setHoveredDetIndex] = useState<number | null>(null);
+  const [showConfidence, setShowConfidence] = useState(true);
   const showBoxes = previewImage?.showDetections ?? true;
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const drawBoxes = useCallback(
-    (detections: Detection[] | undefined, hoveredIndex: number | null = null, selectedIndex: number | null = null) => {
+    (detections: Detection[] | undefined, hoveredIndex: number | null = null, selectedIndex: number | null = null, showConf = true) => {
       const img = imgRef.current;
       const canvas = canvasRef.current;
       if (!img || !canvas || !detections || detections.length === 0) return;
@@ -89,21 +90,23 @@ export default function ImagePreviewModal({
         ctx.lineWidth = isHovered ? 3 : 2;
         ctx.strokeRect(x, y, w, h);
 
-        const textW = ctx.measureText(label).width;
-        const labelX = x;
-        const labelY = y > 16 ? y : y + h + 16;
-        ctx.fillStyle = color;
-        ctx.fillRect(labelX, labelY - 16, textW + 6, 16);
-        ctx.fillStyle = "#000";
-        ctx.fillText(label, labelX + 3, labelY);
+        if (showConf) {
+          const textW = ctx.measureText(label).width;
+          const labelX = x;
+          const labelY = y > 16 ? y : y + h + 16;
+          ctx.fillStyle = color;
+          ctx.fillRect(labelX, labelY - 16, textW + 6, 16);
+          ctx.fillStyle = "#000";
+          ctx.fillText(label, labelX + 3, labelY);
+        }
       }
     },
     [],
   );
 
   useEffect(() => {
-    if (showBoxes) drawBoxes(previewImage?.detections, hoveredDetIndex, previewImage?.selectedDetectionIndex ?? null);
-  }, [drawBoxes, previewImage, showBoxes, hoveredDetIndex]);
+    if (showBoxes) drawBoxes(previewImage?.detections, hoveredDetIndex, previewImage?.selectedDetectionIndex ?? null, showConfidence);
+  }, [drawBoxes, previewImage, showBoxes, hoveredDetIndex, showConfidence]);
 
   useEffect(() => {
     setHoveredDetIndex(null);
@@ -266,7 +269,7 @@ export default function ImagePreviewModal({
               ref={imgRef}
               src={previewImage.previewUrl}
               alt={previewImage.filename}
-              onLoad={() => { if (showBoxes) drawBoxes(previewImage.detections, null, previewImage.selectedDetectionIndex ?? null); }}
+              onLoad={() => { if (showBoxes) drawBoxes(previewImage.detections, null, previewImage.selectedDetectionIndex ?? null, showConfidence); }}
               style={{
                 display: "block",
                 maxWidth: "100%",
@@ -411,18 +414,29 @@ export default function ImagePreviewModal({
               Detect
             </button>
           ) : previewImage.detections.length > 0 ? (
-            <button
-              type="button"
-              className={`btn btn-sm d-flex align-items-center gap-2 ${
-                showBoxes ? "btn-success" : "btn-outline-secondary"
-              }`}
-              onClick={() => {
-                if (previewIndex !== null) onToggleDetections(previewIndex);
-              }}
-            >
-              <Check size={14} />
-              {showBoxes ? "Bounding boxes on" : "Bounding boxes off"}
-            </button>
+            <div className="d-flex align-items-center gap-2">
+              <button
+                type="button"
+                className={`btn btn-sm d-flex align-items-center gap-2 ${
+                  showBoxes ? "btn-success" : "btn-outline-secondary"
+                }`}
+                onClick={() => {
+                  if (previewIndex !== null) onToggleDetections(previewIndex);
+                }}
+              >
+                <Check size={14} />
+                {showBoxes ? "Bounding boxes on" : "Bounding boxes off"}
+              </button>
+              {showBoxes && (
+                <button
+                  type="button"
+                  className={`btn btn-sm ${showConfidence ? "btn-success" : "btn-outline-secondary"}`}
+                  onClick={() => setShowConfidence((prev) => !prev)}
+                >
+                  {showConfidence ? "Confidence on" : "Confidence off"}
+                </button>
+              )}
+            </div>
           ) : (
             <div />
           )}
