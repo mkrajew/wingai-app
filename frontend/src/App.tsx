@@ -278,21 +278,22 @@ function App() {
 
   async function handleDetect() {
     if (detection.inProgress || imageFiles.length === 0) return;
-    setDetection({ inProgress: true, completed: 0, total: imageFiles.length });
+    const toDetect = imageFiles.filter((img) => !img.skipProcessing && img.detections === undefined);
+    if (toDetect.length === 0) return;
+    setDetection({ inProgress: true, completed: 0, total: toDetect.length });
     setDetectionError(null);
     try {
-      const results: ImageFile[] = [];
-      for (const img of imageFiles) {
+      const detectionMap = new Map<string, ImageFile>();
+      for (const img of toDetect) {
         try {
           const dets = await detectFromUrl(img.previewUrl);
-          results.push({ ...img, detections: dets });
+          detectionMap.set(img.filename, { ...img, detections: dets });
         } catch (err) {
           const message = err instanceof Error ? err.message : "Unknown error";
-          if (results.length === 0) {
+          if (detectionMap.size === 0) {
             setDetectionError(message);
             return;
           }
-          results.push(img);
         } finally {
           setDetection((prev) => ({
             ...prev,
@@ -300,7 +301,7 @@ function App() {
           }));
         }
       }
-      setImageFiles(results);
+      setImageFiles((prev) => prev.map((img) => detectionMap.get(img.filename) ?? img));
     } finally {
       setDetection((prev) => ({ ...prev, inProgress: false }));
     }
