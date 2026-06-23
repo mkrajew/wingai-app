@@ -1,60 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { HelpCircle } from "lucide-react";
-
-const SHORTCUTS = [
-  {
-    context: "Image preview",
-    rows: [
-      { keys: ["←", "→"], description: "Previous / next image" },
-      { keys: ["B"], description: "Toggle bounding box on / off" },
-      { keys: ["N"], description: "Focus filename to rename" },
-      { keys: ["Enter"], description: "Confirm rename" },
-      { keys: ["Delete"], description: "Delete current image" },
-      { keys: ["Esc"], description: "Close preview" },
-    ],
-  },
-  {
-    context: "Review view",
-    rows: [
-      { keys: ["←", "→"], description: "Previous / next result" },
-      { keys: ["N"], description: "Focus filename to rename" },
-      { keys: ["Enter"], description: "Confirm rename" },
-    ],
-  },
-];
-
-const STEPS = [
-  {
-    step: "1. Upload images",
-    detail: "Drag & drop or click to select images. Supported formats: JPEG, PNG, WebP.",
-  },
-  {
-    step: "2. Load the detection model",
-    detail: 'Open "Detection model" in the header and click "Load model". The model is cached in the browser — you only need to do this once.',
-  },
-  {
-    step: "3. Detect objects",
-    detail: 'Click "Detect" to run detection on all images at once, or open the preview of a single image and click "Detect" there.',
-  },
-  {
-    step: "4. Review bounding boxes",
-    detail: 'Open a preview to see the bounding box. Use the "Bounding box" button to toggle it per image.',
-  },
-  {
-    step: "5. Process",
-    detail: 'Click "Process" to start processing. Images with bounding boxes enabled are automatically cropped to the detected region before processing.',
-  },
-  {
-    step: "6. Review results",
-    detail: 'After processing, inspect the results. You can edit landmark positions directly on the image and zoom in and out for precise adjustments.',
-  },
-  {
-    step: "7. Download data",
-    detail: 'Export your results in CSV format for spreadsheet analysis, or in Identifly format for direct use in the Identifly workflow.',
-  },
-];
+import { useT } from "../i18n";
 
 export default function HelpPanel() {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -87,7 +36,7 @@ export default function HelpPanel() {
         aria-label="Help"
       >
         <HelpCircle size={15} />
-        <span>Help</span>
+        <span>{t.help}</span>
       </button>
 
       {open && (
@@ -104,7 +53,7 @@ export default function HelpPanel() {
           className="border rounded shadow bg-body p-3"
         >
           <div className="d-flex justify-content-between align-items-center mb-3">
-            <span className="fw-semibold">How to use WingAI</span>
+            <span className="fw-semibold">{t.howToUse}</span>
             <button
               type="button"
               className="btn btn-close btn-sm"
@@ -115,12 +64,12 @@ export default function HelpPanel() {
 
           {/* Workflow */}
           <p className="small fw-semibold text-muted text-uppercase mb-2" style={{ letterSpacing: "0.05em" }}>
-            Workflow
+            {t.workflowLabel}
           </p>
           <ol className="ps-3 mb-3" style={{ fontSize: "0.85rem" }}>
-            {STEPS.map(({ step, detail }) => (
+            {t.steps.map(({ step, detail }) => (
               <li key={step} className="mb-2">
-                <span className="fw-semibold">{step.replace(/^\d+\.\s/, "")}</span>
+                <span className="fw-semibold">{step}</span>
                 <div className="text-muted">{detail}</div>
               </li>
             ))}
@@ -130,9 +79,9 @@ export default function HelpPanel() {
 
           {/* Shortcuts */}
           <p className="small fw-semibold text-muted text-uppercase mb-2" style={{ letterSpacing: "0.05em" }}>
-            Keyboard shortcuts
+            {t.keyboardShortcutsLabel}
           </p>
-          {SHORTCUTS.map(({ context, rows }) => (
+          {t.shortcuts.map(({ context, rows }) => (
             <div key={context} className="mb-3">
               <p className="small fw-semibold mb-1">{context}</p>
               <table className="table table-sm table-borderless mb-0" style={{ fontSize: "0.82rem" }}>

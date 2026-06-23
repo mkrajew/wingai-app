@@ -3,6 +3,7 @@ import type { ImageFile } from "../App";
 import { useDropzone } from "react-dropzone";
 import { formatBytes } from "../utils";
 import ImagePreviewModal from "./ImagePreviewModal";
+import { useT } from "../i18n";
 
 export default UploadImages;
 
@@ -96,6 +97,7 @@ type DropZoneAreaProps = {
   addFiles: (accepted: File[]) => void;
 };
 function DropZoneArea({ addFiles }: DropZoneAreaProps) {
+  const t = useT();
   const [isHovering, setIsHovering] = useState(false);
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -132,11 +134,9 @@ function DropZoneArea({ addFiles }: DropZoneAreaProps) {
     >
       <input {...getInputProps()} />
       <div className="fw-semibold ">
-        {isDragActive
-          ? "Drop files here..."
-          : "Drag photos here or click to select"}
+        {isDragActive ? t.dropFilesHere : t.dragPhotosHere}
       </div>
-      <div className="text-muted mt-1">Supported formats: .png, .jpg</div>
+      <div className="text-muted mt-1">{t.supportedFormats}</div>
     </div>
   );
 }
@@ -169,12 +169,13 @@ function ImageList({
   onSelectImage,
   onPreviewFirst,
 }: ImageListProps) {
+  const t = useT();
   if (totalCount === 0) return null;
   return (
     <div className="d-flex flex-column mt-3">
       <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-3 mb-3">
         <h3 className="mb-0">
-          Uploaded {totalCount} {totalCount === 1 ? "image" : "images"}:
+          {t.uploadedImages(totalCount)}
         </h3>
         <div className="flex-grow-1">
           <div className="d-flex align-items-center gap-2">
@@ -182,7 +183,7 @@ function ImageList({
               id="upload-filter"
               type="text"
               className="form-control"
-              placeholder="Type to filter..."
+              placeholder={t.typeToFilter}
               value={filterText}
               onChange={(event) => onFilterChange(event.target.value)}
             />
@@ -190,21 +191,21 @@ function ImageList({
         </div>
         <div className="d-flex align-items-center gap-2">
           <button type="button" className="btn btn-primary" onClick={onProcess}>
-            Process
+            {t.process}
           </button>
           <button
             type="button"
             className="btn btn-outline-secondary"
             onClick={onPreviewFirst}
           >
-            Preview
+            {t.preview}
           </button>
           <button
             type="button"
             className="btn btn-outline-secondary"
             onClick={clearFiles}
           >
-            Clear
+            {t.clear}
           </button>
           <button
             type="button"
@@ -219,13 +220,13 @@ function ImageList({
                 aria-hidden="true"
               />
             )}
-            Detect
+            {t.detect}
           </button>
         </div>
       </div>
       {detectionError && (
         <div className="alert alert-danger py-2 px-3 mb-2 small" role="alert">
-          Detection failed: {detectionError}
+          {t.detectionFailed(detectionError ?? "")}
         </div>
       )}
       <ul
@@ -238,7 +239,7 @@ function ImageList({
       >
         {entries.length === 0 ? (
           <li className="list-group-item text-center text-muted">
-            No files match the current filter.
+            {t.noFilesMatch}
           </li>
         ) : (
           entries.map(({ image, index }) => (
@@ -261,9 +262,10 @@ type ImageListItemProps = {
   onSelect: () => void;
 };
 function ImageListItem({ image, onRemove, onSelect }: ImageListItemProps) {
+  const t = useT();
   const width = image.width;
   const height = image.height;
-  let dimensionLabel = "dimensions...";
+  let dimensionLabel = t.dimensionsLoading;
 
   if (
     typeof width === "number" &&

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addPngTextChunk, createZipBlob } from "../utils";
 import type { ImageFile } from "../App";
+import { useT } from "../i18n";
 
 type ReviewImagesProps = {
   images: ImageFile[];
@@ -34,6 +35,7 @@ export default function ReviewImages({
   onReset,
   onDownloadNotice,
 }: ReviewImagesProps) {
+  const t = useT();
   const image = images[index];
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -104,7 +106,7 @@ export default function ReviewImages({
   };
 
   if (!image) {
-    return <div className="text-muted">No images to review.</div>;
+    return <div className="text-muted">{t.noImagesToReview}</div>;
   }
 
   const viewWidth = image.width ?? 0;
@@ -380,15 +382,14 @@ export default function ReviewImages({
             }}
           >
             <div className="fw-semibold small">
-              Please check images:{" "}
-              {checkIndices.map((idx) => idx + 1).join(", ")}
+              {t.pleaseCheckImages(checkIndices.map((idx) => idx + 1).join(", "))}
             </div>
             <button
               type="button"
               className="btn btn-outline-danger btn-sm"
               onClick={handleNextCheck}
             >
-              Next
+              {t.next}
             </button>
           </div>
         </div>
@@ -396,7 +397,7 @@ export default function ReviewImages({
       <div className="d-flex align-items-center w-100 gap-3">
         <div className="d-flex align-items-center justify-content-between flex-grow-1">
           <h3 className="mb-0">
-            Image {index + 1} of {images.length}
+            {t.imageOf(index + 1, images.length)}
           </h3>
           <div className="d-flex align-items-center gap-2">
             <button
@@ -405,7 +406,7 @@ export default function ReviewImages({
               onClick={() => setIsGenerateOpen(true)}
               disabled={disableActions}
             >
-              Generate data
+              {t.generateData}
             </button>
             <button
               type="button"
@@ -413,21 +414,21 @@ export default function ReviewImages({
               onClick={() => fileInputRef.current?.click()}
               disabled={disableActions}
             >
-              Add files
+              {t.addFiles}
             </button>
             <button
               type="button"
               className="btn btn-outline-secondary btn-sm"
               onClick={onReset}
             >
-              Reset
+              {t.reset}
             </button>
             <button
               type="button"
               className="btn btn-outline-danger btn-sm"
               onClick={handleDelete}
             >
-              Delete
+              {t.delete}
             </button>
             <input
               ref={fileInputRef}
@@ -446,7 +447,7 @@ export default function ReviewImages({
           </div>
         </div>
         <h3 className="mb-0" style={{ width: "240px" }}>
-          Files
+          {t.files}
         </h3>
       </div>
 
@@ -598,7 +599,7 @@ export default function ReviewImages({
                   ))}
               </svg>
             ) : (
-              <div className="text-muted p-3">Loading image...</div>
+              <div className="text-muted p-3">{t.loadingImage}</div>
             )}
           </div>
           <div className="d-flex align-items-center gap-3 w-100">
@@ -625,7 +626,7 @@ export default function ReviewImages({
               disabled={index <= 0}
               onClick={() => onIndexChange(Math.max(0, index - 1))}
             >
-              Previous
+              {t.previous}
             </button>
             <input
               type="text"
@@ -649,25 +650,25 @@ export default function ReviewImages({
                 onIndexChange(Math.min(images.length - 1, index + 1))
               }
             >
-              Next
+              {t.next}
             </button>
           </div>
           <div className="text-muted small">
             {viewWidth > 0 && viewHeight > 0
-              ? `${viewWidth}×${viewHeight}px`
-              : "Dimensions: ..."}
+              ? t.dimensionsPx(viewWidth, viewHeight)
+              : t.dimensionsLoading}
           </div>
 
           {!hasVector && !image.error && (
-            <div className="text-muted">Processing points...</div>
+            <div className="text-muted">{t.processingPoints}</div>
           )}
           {image.error && (
-            <div className="text-danger small">Error: {image.error}</div>
+            <div className="text-danger small">{t.errorMsg(image.error)}</div>
           )}
 
           {hasVector && (
             <div className="w-100">
-              <div className="fw-semibold mb-2">Points</div>
+              <div className="fw-semibold mb-2">{t.points}</div>
               <div className="table-responsive">
                 <table className="table table-sm table-striped align-middle mb-0">
                   <thead>
@@ -781,7 +782,7 @@ export default function ReviewImages({
             }}
           >
             <div className="d-flex align-items-center justify-content-between">
-              <h4 className="mb-0">Generate data</h4>
+              <h4 className="mb-0">{t.generateData}</h4>
               <button
                 type="button"
                 className="btn btn-close"
@@ -799,7 +800,7 @@ export default function ReviewImages({
                     handleToggleMetadata(event.currentTarget.checked)
                   }
                 />
-                <span className="form-check-label">Image metadata</span>
+                <span className="form-check-label">{t.imageMetadata}</span>
               </label>
               <label className="form-check d-flex align-items-center gap-2">
                 <input
@@ -810,11 +811,11 @@ export default function ReviewImages({
                     handleToggleCsv(event.currentTarget.checked)
                   }
                 />
-                <span className="form-check-label">CSV</span>
+                <span className="form-check-label">{t.csv}</span>
               </label>
               {!exportMetadata && !exportCsv && (
                 <div className="text-danger small">
-                  Select at least one option.
+                  {t.selectAtLeastOne}
                 </div>
               )}
             </div>
@@ -824,7 +825,7 @@ export default function ReviewImages({
                 className="btn btn-outline-secondary"
                 onClick={() => setIsGenerateOpen(false)}
               >
-                Cancel
+                {t.cancel}
               </button>
               <button
                 type="button"
@@ -832,7 +833,7 @@ export default function ReviewImages({
                 onClick={() => void handleDownload()}
                 disabled={disableActions || (!exportMetadata && !exportCsv)}
               >
-                Download
+                {t.download}
               </button>
             </div>
           </div>

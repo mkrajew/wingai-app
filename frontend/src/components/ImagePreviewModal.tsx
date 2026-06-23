@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { formatBytes } from "../utils";
 import type { ImageFile, Detection } from "../App";
+import { useT } from "../i18n";
 
 export type ImagePreviewModalProps = {
   images: ImageFile[];
@@ -26,6 +27,7 @@ export default function ImagePreviewModal({
   onDetectSingle,
   isDetecting,
 }: ImagePreviewModalProps) {
+  const t = useT();
   const previewImage =
     previewIndex === null ? null : images[previewIndex] ?? null;
   const [previewDimensions, setPreviewDimensions] = useState<{
@@ -220,7 +222,7 @@ export default function ImagePreviewModal({
         <div className="text-center text-muted">
           {previewIndex === null
             ? ""
-            : `Image ${previewIndex + 1} of ${images.length}`}
+            : t.imagePreviewOf(previewIndex + 1, images.length)}
         </div>
         <div
           style={{
@@ -276,12 +278,12 @@ export default function ImagePreviewModal({
           {formatBytes(previewImage.file.size)}
           {" • "}
           {previewDimensions
-            ? `${previewDimensions.width}×${previewDimensions.height}px`
-            : "Wymiary: ..."}
+            ? t.dimensionsPx(previewDimensions.width, previewDimensions.height)
+            : t.dimensionsLoading}
           {" • "}
           {previewImage.file.type
             ? previewImage.file.type.replace(/^image\//, "")
-            : "unknown type"}
+            : t.unknownType}
         </div>
         <div className="d-flex justify-content-end">
           <button
@@ -301,7 +303,7 @@ export default function ImagePreviewModal({
               }
             }}
           >
-            Delete
+            {t.delete}
           </button>
         </div>
         <div className="d-flex justify-content-between align-items-center gap-2">
@@ -315,7 +317,7 @@ export default function ImagePreviewModal({
                 : onPreviewIndexChange(Math.max(0, previewIndex - 1))
             }
           >
-            Previous
+            {t.previous}
           </button>
           {previewImage.detections === undefined ? (
             <button
@@ -333,7 +335,7 @@ export default function ImagePreviewModal({
                   aria-hidden="true"
                 />
               )}
-              Detect
+              {t.detect}
             </button>
           ) : previewImage.detections.length > 0 ? (
             <button
@@ -346,7 +348,7 @@ export default function ImagePreviewModal({
               }}
             >
               <Check size={14} />
-              {showBoxes ? "Bounding box on" : "Bounding box off"}
+              {showBoxes ? t.boundingBoxOn : t.boundingBoxOff}
             </button>
           ) : (
             <div />
@@ -363,7 +365,7 @@ export default function ImagePreviewModal({
                   )
             }
           >
-            Next
+            {t.next}
           </button>
         </div>
       </div>
