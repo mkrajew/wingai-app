@@ -17,6 +17,7 @@ export type ImagePreviewModalProps = {
   onSelectDetection: (imageIndex: number, detIndex: number) => void;
   onToggleDetectionExclusion: (imageIndex: number, detIndex: number) => void;
   onExtractDetections: (imageIndex: number) => void;
+  onFlipImage: (imageIndex: number, direction: "horizontal" | "vertical") => void;
   onToggleSkipProcessing: (filename: string) => void;
   isDetecting: boolean;
 };
@@ -33,6 +34,7 @@ export default function ImagePreviewModal({
   onSelectDetection,
   onToggleDetectionExclusion,
   onExtractDetections,
+  onFlipImage,
   onToggleSkipProcessing,
   isDetecting,
 }: ImagePreviewModalProps) {
@@ -419,13 +421,31 @@ export default function ImagePreviewModal({
             : "unknown type"}
         </div>
         <div className="d-flex justify-content-between align-items-center">
-          <button
-            type="button"
-            className={`btn btn-sm ${previewImage.skipProcessing ? "btn-outline-secondary" : "btn-outline-success"}`}
-            onClick={() => onToggleSkipProcessing(previewImage.filename)}
-          >
-            {previewImage.skipProcessing ? "Skip" : "Process"}
-          </button>
+          <div className="d-flex gap-2">
+            <button
+              type="button"
+              className={`btn btn-sm ${previewImage.skipProcessing ? "btn-outline-secondary" : "btn-outline-success"}`}
+              onClick={() => onToggleSkipProcessing(previewImage.filename)}
+            >
+              {previewImage.skipProcessing ? "Skip" : "Process"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              title="Flip horizontal"
+              onClick={() => { if (previewIndex !== null) onFlipImage(previewIndex, "horizontal"); }}
+            >
+              ↔ Flip H
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              title="Flip vertical"
+              onClick={() => { if (previewIndex !== null) onFlipImage(previewIndex, "vertical"); }}
+            >
+              ↕ Flip V
+            </button>
+          </div>
           <button
             type="button"
             className="btn btn-outline-danger"

@@ -325,6 +325,53 @@ function App() {
     }
   }
 
+  async function handleFlipImage(imageIndex: number, direction: "horizontal" | "vertical") {
+    const image = imageFiles[imageIndex];
+    if (!image) return;
+
+    const srcImg = await loadImage(image.previewUrl);
+    const canvas = document.createElement("canvas");
+    canvas.width = srcImg.naturalWidth;
+    canvas.height = srcImg.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    if (direction === "horizontal") {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    } else {
+      ctx.translate(0, canvas.height);
+      ctx.scale(1, -1);
+    }
+    ctx.drawImage(srcImg, 0, 0);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Flip failed"))), "image/png");
+    });
+
+    const newFile = new File([blob], image.filename, { type: "image/png", lastModified: Date.now() });
+    const newPreviewUrl = URL.createObjectURL(blob);
+    URL.revokeObjectURL(image.previewUrl);
+
+    setImageFiles((prev) =>
+      prev.map((f, i) =>
+        i === imageIndex
+          ? {
+              ...f,
+              file: newFile,
+              previewUrl: newPreviewUrl,
+              detections: undefined,
+              selectedDetectionIndex: undefined,
+              excludedDetections: undefined,
+              vector: undefined,
+              check: undefined,
+              status: "new",
+            }
+          : f,
+      ),
+    );
+  }
+
   function handleToggleSkipProcessing(filename: string) {
     setImageFiles((prev) =>
       prev.map((f) =>
@@ -939,6 +986,7 @@ function App() {
             onToggleDetections={handleToggleDetections}
             onDetectSingle={handleDetectSingle}
             onSelectDetection={handleSelectDetection}
+            onFlipImage={handleFlipImage}
             onToggleSkipProcessing={handleToggleSkipProcessing}
             onToggleDetectionExclusion={handleToggleDetectionExclusion}
             onExtractDetections={handleExtractDetections}

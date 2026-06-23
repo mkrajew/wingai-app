@@ -18,6 +18,7 @@ type UploadImagesProps = {
   detectionError: string | null;
   onToggleDetections: (index: number) => void;
   onDetectSingle: (index: number) => void;
+  onFlipImage: (imageIndex: number, direction: "horizontal" | "vertical") => void;
   onToggleSkipProcessing: (filename: string) => void;
   onSelectDetection: (imageIndex: number, detIndex: number) => void;
   onToggleDetectionExclusion: (imageIndex: number, detIndex: number) => void;
@@ -35,6 +36,7 @@ function UploadImages({
   detectionError,
   onToggleDetections,
   onDetectSingle,
+  onFlipImage,
   onToggleSkipProcessing,
   onSelectDetection,
   onToggleDetectionExclusion,
@@ -98,6 +100,7 @@ function UploadImages({
         onSelectDetection={onSelectDetection}
         onToggleDetectionExclusion={onToggleDetectionExclusion}
         onExtractDetections={onExtractDetections}
+        onFlipImage={onFlipImage}
         onToggleSkipProcessing={onToggleSkipProcessing}
         isDetecting={isDetecting}
       />
