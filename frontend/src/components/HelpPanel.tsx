@@ -7,6 +7,8 @@ const SHORTCUTS = [
     rows: [
       { keys: ["←", "→"], description: "Previous / next image" },
       { keys: ["B"], description: "Toggle bounding box on / off" },
+      { keys: ["H"], description: "Flip image horizontally (clears detections)" },
+      { keys: ["V"], description: "Flip image vertically (clears detections)" },
       { keys: ["N"], description: "Focus filename to rename" },
       { keys: ["Enter"], description: "Confirm rename" },
       { keys: ["Delete"], description: "Delete current image" },
@@ -34,15 +36,15 @@ const STEPS = [
   },
   {
     step: "3. Detect objects",
-    detail: 'Click "Detect" to run detection on all images at once, or open the preview of a single image and click "Detect" there.',
+    detail: 'Click "Detect" to run detection on all images. Images already detected or marked as Skip are skipped automatically. You can also detect a single image from its preview.',
   },
   {
     step: "4. Review bounding boxes",
-    detail: 'Open a preview to see the bounding box. Use the "Bounding box" button to toggle it per image.',
+    detail: 'Open a preview to see all detected bounding boxes. The green box is the one used for cropping. Use the checkbox on each box to include/exclude it from extracting. You can also flip the image or extract each detected wing as a separate image.',
   },
   {
     step: "5. Process",
-    detail: 'Click "Process" to start processing. Images with bounding boxes enabled are automatically cropped to the detected region before processing.',
+    detail: 'Use the Process/Skip toggle per image to control which images are sent to processing. Skipped images are excluded entirely.',
   },
   {
     step: "6. Review results",
