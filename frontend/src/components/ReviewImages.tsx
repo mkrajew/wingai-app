@@ -318,12 +318,13 @@ export default function ReviewImages({
       for (let i = 0; i < 19; i += 1) {
         const x = vector[i * 2];
         const y = vector[i * 2 + 1];
-        values.push(Number.isFinite(x) ? x.toString() : "");
+        values.push(Number.isFinite(x) ? Math.trunc(x).toString() : "");
         if (!Number.isFinite(y)) {
           values.push("");
           continue;
         }
-        const flippedY = ySize !== null && ySize > 0 ? ySize - y - 2 : y;
+        const intY = Math.trunc(y);
+        const flippedY = ySize !== null && ySize > 0 ? ySize - intY - 2 : intY;
         values.push(flippedY.toString());
       }
       rows.push(values.map((value) => csvEscape(value)).join(","));
