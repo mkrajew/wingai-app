@@ -18,6 +18,7 @@ import {
   loadImage,
   loadImageDimensions,
   renderTransformedImage,
+  canvasToBlob,
 } from "./utils/image";
 import type { ImageTransform } from "./utils/image";
 import { useT } from "./i18n";
@@ -111,15 +112,7 @@ function App() {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((result) => {
-          if (!result) {
-            reject(new Error("Failed to resize image"));
-            return;
-          }
-          resolve(result);
-        }, "image/png");
-      });
+      const blob = await canvasToBlob(canvas, "image/png");
       return blob;
     } finally {
       URL.revokeObjectURL(url);
@@ -361,9 +354,7 @@ function App() {
       if (!ctx) continue;
       ctx.drawImage(srcImg, x1, y1, cropW, cropH, 0, 0, cropW, cropH);
 
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Crop failed"))), "image/png");
-      });
+      const blob = await canvasToBlob(canvas, "image/png");
 
       const desiredName = `${baseName}_wing_${n + 1}.png`;
       const filename = ensureUniqueFilenameFromSet(desiredName, used);
@@ -450,15 +441,7 @@ function App() {
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Failed to access canvas context");
       ctx.drawImage(img, 0, 0);
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((result) => {
-          if (!result) {
-            reject(new Error("Failed to convert image"));
-            return;
-          }
-          resolve(result);
-        }, "image/png");
-      });
+      const blob = await canvasToBlob(canvas, "image/png");
       return new File([blob], targetName, {
         type: "image/png",
         lastModified: file.lastModified,
@@ -559,12 +542,7 @@ function App() {
       if (!ctx) return image;
       ctx.drawImage(srcImg, x1, y1, cropW, cropH, 0, 0, cropW, cropH);
 
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => {
-          if (!b) reject(new Error("Failed to crop image"));
-          else resolve(b);
-        }, "image/png");
-      });
+      const blob = await canvasToBlob(canvas, "image/png");
 
       const croppedFile = new File([blob], image.filename, {
         type: "image/png",
