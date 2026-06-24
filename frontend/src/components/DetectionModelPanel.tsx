@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useT } from "../i18n";
+import { MODEL_URL, CACHE_NAME } from "../utils/modelCache";
 import {
   Download,
   ChevronDown,
@@ -14,9 +15,6 @@ type ModelStatus =
   | { phase: "loading"; progress: number | null }
   | { phase: "ready" }
   | { phase: "error"; message: string };
-
-const MODEL_URL = "/models/detector.onnx";
-const CACHE_NAME = "wingai-models-v1";
 
 async function isModelCached(): Promise<boolean> {
   if (!("caches" in window)) return false;
