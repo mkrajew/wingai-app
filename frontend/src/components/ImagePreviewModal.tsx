@@ -331,7 +331,7 @@ export default function ImagePreviewModal({
               style={{
                 display: "block",
                 maxWidth: "100%",
-                maxHeight: "100%",
+                maxHeight: "calc(80vh - 14rem)",
                 objectFit: "contain",
               }}
             />
