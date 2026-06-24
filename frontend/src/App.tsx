@@ -21,6 +21,7 @@ import {
   canvasToBlob,
 } from "./utils/image";
 import type { ImageTransform } from "./utils/image";
+import { mapWithConcurrency } from "./utils/async";
 import { useT } from "./i18n";
 
 export default App;
@@ -49,6 +50,10 @@ type ThemeMode = "light" | "dark";
 const UPLOAD_MAX_EDGE = 400;
 const ENABLE_UPLOAD_RESIZE = false;
 const THEME_STORAGE_KEY = "wingai-theme";
+// Max images processed concurrently. Keeps memory bounded and avoids flooding
+// the backend (whose inference is effectively serialized) while overlapping
+// client-side crop/encode with in-flight requests.
+const PROCESS_CONCURRENCY = 4;
 
 const getInitialTheme = (): ThemeMode => {
   if (typeof window === "undefined") return "light";
@@ -575,8 +580,10 @@ function App() {
     setProcessing({ inProgress: true, completed: 0, total: images.length });
 
     try {
-      const processed = await Promise.all(
-        images.map(async (image): Promise<ImageFile> => {
+      const processed = await mapWithConcurrency(
+        images,
+        PROCESS_CONCURRENCY,
+        async (image): Promise<ImageFile> => {
           let prepared = image;
           let width = image.width;
           let height = image.height;
@@ -642,7 +649,7 @@ function App() {
               completed: Math.min(prev.total, prev.completed + 1),
             }));
           }
-        }),
+        },
       );
 
       const used = new Set(existing.map((file) => file.filename.toLowerCase()));
