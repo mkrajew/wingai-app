@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import UploadImages from "./components/UploadImages";
 import ReviewImages from "./components/ReviewImages";
+import ConfirmDialog from "./components/ConfirmDialog";
 import DetectionModelPanel from "./components/DetectionModelPanel";
 import HelpPanel from "./components/HelpPanel";
 import LanguageSwitcher from "./components/LanguageSwitcher";
@@ -83,6 +84,9 @@ function App() {
   const [reviewIndex, setReviewIndex] = useState(0);
   const [showDownloadNotice, setShowDownloadNotice] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+  const [editConfirmTrigger, setEditConfirmTrigger] = useState(0);
+  const [resetConfirmTrigger, setResetConfirmTrigger] = useState(0);
+  const [isUploadResetConfirmOpen, setIsUploadResetConfirmOpen] = useState(false);
   const downloadNoticeTimeout = useRef<number | null>(null);
   const dimensionsRequestedRef = useRef(new Set<string>());
   const thumbnailRequestedRef = useRef(new Set<string>());
@@ -849,6 +853,23 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (step === "review") {
+      history.pushState({ wingaiStep: "review" }, "");
+    }
+  }, [step]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (step !== "review") return;
+      // Re-push so the back button still works if the user cancels the dialog.
+      history.pushState({ wingaiStep: "review" }, "");
+      setEditConfirmTrigger((n) => n + 1);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [step]);
+
+  useEffect(() => {
     const root = document.documentElement;
     root.setAttribute("data-bs-theme", theme);
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
@@ -897,7 +918,13 @@ function App() {
           <button
             type="button"
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center" }}
-            onClick={resetAll}
+            onClick={
+              step === "review"
+                ? () => setResetConfirmTrigger((n) => n + 1)
+                : imageFiles.length > 0
+                  ? () => setIsUploadResetConfirmOpen(true)
+                  : resetAll
+            }
             aria-label={t.homeLabel}
           >
             <img
@@ -1033,12 +1060,28 @@ function App() {
             onReset={resetAll}
             onClearCheck={clearCheckForIndex}
             onDownloadNotice={triggerDownloadNotice}
+            editConfirmTrigger={editConfirmTrigger}
+            resetConfirmTrigger={resetConfirmTrigger}
           />
         )}
         <footer className="mt-4 text-center text-muted small">
           © {new Date().getFullYear()} Mateusz Krajewski
         </footer>
       </div>
+      {isUploadResetConfirmOpen && (
+        <ConfirmDialog
+          title={t.resetTitle}
+          message={t.resetMessage}
+          confirmLabel={t.reset}
+          cancelLabel={t.cancel}
+          closeLabel={t.close}
+          onConfirm={() => {
+            setIsUploadResetConfirmOpen(false);
+            resetAll();
+          }}
+          onCancel={() => setIsUploadResetConfirmOpen(false)}
+        />
+      )}
     </>
   );
 }

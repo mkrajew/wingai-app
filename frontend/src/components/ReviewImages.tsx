@@ -21,6 +21,8 @@ type ReviewImagesProps = {
   onBackToEdit: () => void;
   onReset: () => void;
   onDownloadNotice: () => void;
+  editConfirmTrigger: number;
+  resetConfirmTrigger: number;
 };
 
 export default function ReviewImages({
@@ -35,6 +37,8 @@ export default function ReviewImages({
   onBackToEdit,
   onReset,
   onDownloadNotice,
+  editConfirmTrigger,
+  resetConfirmTrigger,
 }: ReviewImagesProps) {
   const t = useT();
   const image = images[index];
@@ -153,6 +157,16 @@ export default function ReviewImages({
     if (!image?.check) return;
     onClearCheck(index);
   }, [image?.check, index, onClearCheck]);
+
+  useEffect(() => {
+    if (editConfirmTrigger === 0) return;
+    setIsEditConfirmOpen(true);
+  }, [editConfirmTrigger]);
+
+  useEffect(() => {
+    if (resetConfirmTrigger === 0) return;
+    setIsResetConfirmOpen(true);
+  }, [resetConfirmTrigger]);
 
   useEffect(() => {
     setZoom(1);

@@ -107,14 +107,14 @@ export default function DetectionModelPanel() {
     modelStatus.phase === "ready" ? (
       <span
         className="badge bg-success ms-1"
-        style={{ fontSize: "0.6rem", verticalAlign: "middle" }}
+        style={{ fontSize: "0.6rem", alignSelf: "center", marginTop: "2px" }}
       >
         {t.statusReady}
       </span>
     ) : modelStatus.phase === "loading" ? (
       <span
         className="badge bg-warning text-dark ms-1"
-        style={{ fontSize: "0.6rem", verticalAlign: "middle" }}
+        style={{ fontSize: "0.6rem", alignSelf: "center", marginTop: "2px" }}
       >
         {t.statusLoading}
       </span>
