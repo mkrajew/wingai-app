@@ -799,7 +799,7 @@ function App() {
             type="button"
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center" }}
             onClick={resetAll}
-            aria-label="WingAI Home"
+            aria-label={t.homeLabel}
           >
             <img
               src={theme === "dark" ? "/logo-dark.png" : "/logo.png"}
@@ -833,7 +833,7 @@ function App() {
                 onChange={() =>
                   setTheme((prev) => (prev === "dark" ? "light" : "dark"))
                 }
-                aria-label="Toggle dark mode"
+                aria-label={t.darkMode}
               />
               <label className="form-check-label small" htmlFor="theme-switch">
                 {t.darkMode}

@@ -33,7 +33,7 @@ export default function HelpPanel() {
         type="button"
         className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Help"
+        aria-label={t.help}
       >
         <HelpCircle size={15} />
         <span>{t.help}</span>
@@ -58,7 +58,7 @@ export default function HelpPanel() {
               type="button"
               className="btn btn-close btn-sm"
               onClick={() => setOpen(false)}
-              aria-label="Close help"
+              aria-label={t.close}
             />
           </div>
 

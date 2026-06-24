@@ -299,7 +299,7 @@ export default function ImagePreviewModal({
     >
       <div
         role="dialog"
-        aria-label="Podglad obrazu"
+        aria-label={t.imagePreviewLabel}
         onClick={(event) => event.stopPropagation()}
         style={{
           position: "relative",
@@ -317,7 +317,7 @@ export default function ImagePreviewModal({
       >
         <button
           type="button"
-          aria-label="Zamknij"
+          aria-label={t.close}
           onClick={onClose}
           className="btn btn-close"
           style={{ position: "absolute", top: "0.5rem", right: "0.5rem" }}

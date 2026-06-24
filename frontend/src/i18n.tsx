@@ -11,6 +11,12 @@ export type Translations = {
   detectingObjectsProgress: (completed: number, total: number) => string;
   processingImages: (completed: number, total: number) => string;
 
+  // Accessibility labels
+  close: string;
+  homeLabel: string;
+  selectLanguage: string;
+  imagePreviewLabel: string;
+
   // DropZone
   dropFilesHere: string;
   dragPhotosHere: string;
@@ -92,6 +98,11 @@ const en: Translations = {
   detectingObjects: "Detecting objects...",
   detectingObjectsProgress: (c, t) => `Detecting objects... ${c}/${t}`,
   processingImages: (c, t) => `Processing images... ${c}/${t}`,
+
+  close: "Close",
+  homeLabel: "WingAI home",
+  selectLanguage: "Select language",
+  imagePreviewLabel: "Image preview",
 
   dropFilesHere: "Drop files here...",
   dragPhotosHere: "Drag photos here or click to select",
@@ -221,6 +232,11 @@ const pl: Translations = {
   detectingObjects: "Wykrywanie skrzydeł...",
   detectingObjectsProgress: (c, t) => `Wykrywanie skrzydeł... ${c}/${t}`,
   processingImages: (c, t) => `Przetwarzanie zdjęć... ${c}/${t}`,
+
+  close: "Zamknij",
+  homeLabel: "Strona główna WingAI",
+  selectLanguage: "Wybierz język",
+  imagePreviewLabel: "Podgląd obrazu",
 
   dropFilesHere: "Upuść pliki tutaj...",
   dragPhotosHere: "Przeciągnij zdjęcia tutaj lub kliknij, aby wybrać",

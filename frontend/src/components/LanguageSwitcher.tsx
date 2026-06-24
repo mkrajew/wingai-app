@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Globe, Check, ChevronDown } from "lucide-react";
-import { useLang } from "../i18n";
+import { useLang, useT } from "../i18n";
 import type { Lang } from "../i18n";
 
 type Language = { code: Lang; label: string };
@@ -13,6 +13,7 @@ const LANGUAGES: Language[] = [
 export default function LanguageSwitcher() {
   const [open, setOpen] = useState(false);
   const [current, setLang] = useLang();
+  const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,7 +42,7 @@ export default function LanguageSwitcher() {
         type="button"
         className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Select language"
+        aria-label={t.selectLanguage}
         aria-expanded={open}
       >
         <Globe size={15} />

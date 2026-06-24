@@ -767,7 +767,7 @@ export default function ReviewImages({
         >
           <div
             role="dialog"
-            aria-label="Generate data"
+            aria-label={t.generateData}
             onClick={(event) => event.stopPropagation()}
             style={{
               width: "min(90vw, 420px)",
@@ -786,7 +786,7 @@ export default function ReviewImages({
               <button
                 type="button"
                 className="btn btn-close"
-                aria-label="Close"
+                aria-label={t.close}
                 onClick={() => setIsGenerateOpen(false)}
               />
             </div>
