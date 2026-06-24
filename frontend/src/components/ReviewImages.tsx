@@ -17,7 +17,7 @@ type ReviewImagesProps = {
   ) => void;
   onRename: (imageIndex: number, newName: string) => void;
   onRemove: (filename: string) => void;
-  onAddFiles: (files: File[]) => void;
+  onBackToEdit: () => void;
   onReset: () => void;
   onDownloadNotice: () => void;
 };
@@ -31,7 +31,7 @@ export default function ReviewImages({
   onUpdatePoint,
   onRename,
   onRemove,
-  onAddFiles,
+  onBackToEdit,
   onReset,
   onDownloadNotice,
 }: ReviewImagesProps) {
@@ -41,7 +41,6 @@ export default function ReviewImages({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const activeItemRef = useRef<HTMLButtonElement | null>(null);
   const zoomInputRef = useRef<HTMLInputElement | null>(null);
   const [svgScale, setSvgScale] = useState(1);
@@ -49,6 +48,7 @@ export default function ReviewImages({
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
+  const [isEditConfirmOpen, setIsEditConfirmOpen] = useState(false);
   const [exportMetadata, setExportMetadata] = useState(true);
   const [exportCsv, setExportCsv] = useState(false);
   const disableActions = isProcessing;
@@ -412,10 +412,10 @@ export default function ReviewImages({
             <button
               type="button"
               className="btn btn-outline-secondary btn-sm"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setIsEditConfirmOpen(true)}
               disabled={disableActions}
             >
-              {t.addFiles}
+              {t.edit}
             </button>
             <button
               type="button"
@@ -431,20 +431,6 @@ export default function ReviewImages({
             >
               {t.delete}
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg"
-              multiple
-              onChange={(event) => {
-                if (disableActions) return;
-                const selected = Array.from(event.currentTarget.files ?? []);
-                if (selected.length > 0) onAddFiles(selected);
-                event.currentTarget.value = "";
-              }}
-              disabled={disableActions}
-              style={{ display: "none" }}
-            />
           </div>
         </div>
         <h3 className="mb-0" style={{ width: "240px" }}>
@@ -835,6 +821,70 @@ export default function ReviewImages({
                 disabled={disableActions || (!exportMetadata && !exportCsv)}
               >
                 {t.download}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isEditConfirmOpen && (
+        <div
+          role="presentation"
+          onClick={() => setIsEditConfirmOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+            padding: "1rem",
+          }}
+        >
+          <div
+            role="dialog"
+            aria-label={t.backToEditTitle}
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "min(90vw, 420px)",
+              background: "var(--bs-body-bg)",
+              borderRadius: "10px",
+              padding: "1rem",
+              boxShadow: "var(--bs-box-shadow-lg)",
+              border: "1px solid var(--bs-border-color)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.75rem",
+            }}
+          >
+            <div className="d-flex align-items-center justify-content-between">
+              <h4 className="mb-0">{t.backToEditTitle}</h4>
+              <button
+                type="button"
+                className="btn btn-close"
+                aria-label={t.close}
+                onClick={() => setIsEditConfirmOpen(false)}
+              />
+            </div>
+            <p className="mb-0 text-muted small">{t.backToEditMessage}</p>
+            <div className="d-flex justify-content-end gap-2">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={() => setIsEditConfirmOpen(false)}
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setIsEditConfirmOpen(false);
+                  onBackToEdit();
+                }}
+              >
+                {t.edit}
               </button>
             </div>
           </div>

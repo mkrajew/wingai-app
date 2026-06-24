@@ -76,6 +76,10 @@ function App() {
   const t = useT();
   const [imageFiles, setImageFiles] = useState<ImageFile[]>([]);
   const [step, setStep] = useState<"upload" | "review">("upload");
+  // Preserved copy of the edit-page list captured when Process is clicked, so
+  // "Edit" can restore the original images (including skipped ones) after
+  // processing has replaced the working list with cropped/renamed results.
+  const [uploadSnapshot, setUploadSnapshot] = useState<ImageFile[] | null>(null);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [showDownloadNotice, setShowDownloadNotice] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
@@ -223,6 +227,13 @@ function App() {
       });
       return [];
     });
+    if (uploadSnapshot) {
+      uploadSnapshot.forEach((it) => {
+        URL.revokeObjectURL(it.previewUrl);
+        if (it.thumbUrl) URL.revokeObjectURL(it.thumbUrl);
+      });
+      setUploadSnapshot(null);
+    }
     setStep("upload");
     setReviewIndex(0);
   }
@@ -506,7 +517,8 @@ function App() {
       const nextFilename = toPngFilename(image.filename);
       const pngFile = await convertJpegToPng(image.file, nextFilename);
       const nextPreviewUrl = URL.createObjectURL(pngFile);
-      URL.revokeObjectURL(image.previewUrl);
+      // Note: the original previewUrl is intentionally NOT revoked here — it is
+      // kept alive in the upload snapshot so "Edit" can restore the originals.
       return {
         ...image,
         filename: nextFilename,
@@ -708,6 +720,8 @@ function App() {
     const toProcess = imageFiles.filter((f) => !f.skipProcessing);
     if (toProcess.length === 0) return;
 
+    // Preserve the full edit-page list (incl. skipped) so "Edit" can restore it.
+    setUploadSnapshot(imageFiles);
     setImageFiles(toProcess);
     setStep("review");
     setReviewIndex(0);
@@ -716,28 +730,28 @@ function App() {
     setImageFiles(processed);
   }
 
-  async function addFilesForReview(files: File[]) {
-    if (files.length === 0) return;
-    const existingKeys = new Set(imageFiles.map((f) => fileKey(f.file)));
-    const newFiles: ImageFile[] = [];
+  function handleBackToEdit() {
+    const snapshot = uploadSnapshot;
+    if (!snapshot) return;
 
-    for (const file of files) {
-      const key = fileKey(file);
-      if (existingKeys.has(key)) continue;
-      existingKeys.add(key);
-      newFiles.push({
-        filename: file.name,
-        file: file,
-        previewUrl: URL.createObjectURL(file),
-        status: "new",
-      });
+    // Revoke the processed results' object URLs, but keep any that the restored
+    // originals still reference (an un-cropped PNG keeps its original URL).
+    const keep = new Set<string>();
+    for (const file of snapshot) {
+      keep.add(file.previewUrl);
+      if (file.thumbUrl) keep.add(file.thumbUrl);
+    }
+    for (const file of imageFiles) {
+      if (!keep.has(file.previewUrl)) URL.revokeObjectURL(file.previewUrl);
+      if (file.thumbUrl && !keep.has(file.thumbUrl)) {
+        URL.revokeObjectURL(file.thumbUrl);
+      }
     }
 
-    if (newFiles.length === 0) return;
-
-    const processed = await processImagesWithBackend(newFiles, imageFiles);
-
-    setImageFiles((prevFiles) => [...prevFiles, ...processed]);
+    setImageFiles(snapshot);
+    setUploadSnapshot(null);
+    setStep("upload");
+    setReviewIndex(0);
   }
 
   useEffect(() => {
@@ -1009,7 +1023,7 @@ function App() {
             onUpdatePoint={updatePoint}
             onRename={renameFile}
             onRemove={removeFile}
-            onAddFiles={addFilesForReview}
+            onBackToEdit={handleBackToEdit}
             onReset={resetAll}
             onClearCheck={clearCheckForIndex}
             onDownloadNotice={triggerDownloadNotice}

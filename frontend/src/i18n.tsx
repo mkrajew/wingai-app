@@ -38,7 +38,9 @@ export type Translations = {
   pleaseCheckImages: (indices: string) => string;
   imageOf: (index: number, total: number) => string;
   generateData: string;
-  addFiles: string;
+  edit: string;
+  backToEditTitle: string;
+  backToEditMessage: string;
   reset: string;
   delete: string;
   files: string;
@@ -122,7 +124,10 @@ const en: Translations = {
   pleaseCheckImages: (i) => `Please check images: ${i}`,
   imageOf: (i, t) => `Image ${i} of ${t}`,
   generateData: "Generate data",
-  addFiles: "Add files",
+  edit: "Edit",
+  backToEditTitle: "Return to editing?",
+  backToEditMessage:
+    "This will discard the current results and return to the edit page.",
   reset: "Reset",
   delete: "Delete",
   files: "Files",
@@ -260,7 +265,10 @@ const pl: Translations = {
   pleaseCheckImages: (i) => `Sprawdź zdjęcia: ${i}`,
   imageOf: (i, t) => `Zdjęcie ${i} z ${t}`,
   generateData: "Generuj dane",
-  addFiles: "Dodaj pliki",
+  edit: "Edytuj",
+  backToEditTitle: "Wrócić do edycji?",
+  backToEditMessage:
+    "Spowoduje to odrzucenie bieżących wyników i powrót do strony edycji.",
   reset: "Resetuj",
   delete: "Usuń",
   files: "Pliki",
