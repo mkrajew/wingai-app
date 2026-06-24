@@ -230,6 +230,19 @@ export default function ImagePreviewModal({
         return;
       }
 
+      if (!isEditingName && event.key === "Tab") {
+        const detections = previewImage.detections;
+        if (detections && detections.length > 0 && (previewImage.showDetections ?? true) && previewIndex !== null) {
+          event.preventDefault();
+          const current = previewImage.selectedDetectionIndex ?? 0;
+          const next = event.shiftKey
+            ? (current - 1 + detections.length) % detections.length
+            : (current + 1) % detections.length;
+          onSelectDetection(previewIndex, next);
+        }
+        return;
+      }
+
       if (event.key === "Escape") {
         onClose();
       } else if (event.key === "Delete") {
@@ -261,6 +274,7 @@ export default function ImagePreviewModal({
     onFlipImage,
     onPreviewIndexChange,
     onRemove,
+    onSelectDetection,
     onToggleDetections,
     previewImage,
     previewIndex,

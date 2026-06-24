@@ -194,6 +194,8 @@ const en: Translations = {
       rows: [
         { keys: ["←", "→"], description: "Previous / next image" },
         { keys: ["B"], description: "Toggle bounding box on / off" },
+        { keys: ["Tab"], description: "Select next bounding box" },
+        { keys: ["Shift", "Tab"], description: "Select previous bounding box" },
         { keys: ["H"], description: "Flip image horizontally (clears detections)" },
         { keys: ["V"], description: "Flip image vertically (clears detections)" },
         { keys: ["N"], description: "Focus filename to rename" },
@@ -325,6 +327,8 @@ const pl: Translations = {
       rows: [
         { keys: ["←", "→"], description: "Poprzednie / następne zdjęcie" },
         { keys: ["B"], description: "Włącz / wyłącz ramkę" },
+        { keys: ["Tab"], description: "Wybierz następną ramkę" },
+        { keys: ["Shift", "Tab"], description: "Wybierz poprzednią ramkę" },
         { keys: ["H"], description: "Odwróć zdjęcie poziomo (usuwa wykrycia)" },
         { keys: ["V"], description: "Odwróć zdjęcie pionowo (usuwa wykrycia)" },
         { keys: ["N"], description: "Aktywuj pole nazwy pliku" },
