@@ -431,10 +431,16 @@ function App() {
     }
 
     if (newFiles.length > 0) {
-      setImageFiles((prev) => [
-        ...prev.map((f, i) => (i === imageIndex ? { ...f, skipProcessing: true } : f)),
-        ...newFiles,
-      ]);
+      setImageFiles((prev) => {
+        const updated = prev.map((f, i) =>
+          i === imageIndex ? { ...f, skipProcessing: true } : f,
+        );
+        return [
+          ...updated.slice(0, imageIndex + 1),
+          ...newFiles,
+          ...updated.slice(imageIndex + 1),
+        ];
+      });
     }
   }
 
