@@ -260,13 +260,15 @@ function App() {
     const quality = mimeType === "image/jpeg" ? 0.95 : undefined;
 
     let blob: Blob;
+    let width: number;
+    let height: number;
     try {
-      blob = await renderTransformedImage(
+      ({ blob, width, height } = await renderTransformedImage(
         image.previewUrl,
         transform,
         mimeType,
         quality,
-      );
+      ));
     } catch (err) {
       console.warn("Failed to transform image.", image.filename, err);
       return;
@@ -283,6 +285,8 @@ function App() {
               ...f,
               file: newFile,
               previewUrl: newPreviewUrl,
+              width,
+              height,
               detections: undefined,
               selectedDetectionIndex: undefined,
               excludedDetections: undefined,

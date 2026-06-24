@@ -40,14 +40,15 @@ export type ImageTransform =
 
 /**
  * Loads an image, applies a flip or 90° rotation on a canvas, and returns the
- * re-encoded blob. Rotation swaps the output dimensions (W↔H).
+ * re-encoded blob together with the output dimensions. Rotation swaps the
+ * dimensions (W↔H); flips leave them unchanged.
  */
 export async function renderTransformedImage(
   src: string,
   transform: ImageTransform,
   mimeType: string,
   quality?: number,
-): Promise<Blob> {
+): Promise<{ blob: Blob; width: number; height: number }> {
   const srcImg = await loadImage(src);
   const canvas = document.createElement("canvas");
   const rotated = transform.type === "rotate";
@@ -73,5 +74,6 @@ export async function renderTransformedImage(
   }
   ctx.drawImage(srcImg, 0, 0);
 
-  return canvasToBlob(canvas, mimeType, quality);
+  const blob = await canvasToBlob(canvas, mimeType, quality);
+  return { blob, width: canvas.width, height: canvas.height };
 }
