@@ -66,7 +66,7 @@ def unet_preprocess(img: torch.Tensor) -> torch.Tensor:
     )
     img = F.convert_image_dtype(img, torch.float)
     m, s = img.mean(dim=(1, 2)), img.std(dim=(1, 2))
-    img = F.normalize(img, mean=m, std=s)
+    img = F.normalize(img, mean=m, std=s.clamp(min=1e-6))
     return img
 
 
@@ -92,7 +92,7 @@ def unet_fit_rectangle_preprocess(
     )
     img = F.convert_image_dtype(img, torch.float)
     m, s = img.mean(dim=(1, 2)), img.std(dim=(1, 2))
-    img = F.normalize(img, mean=m, std=s)
+    img = F.normalize(img, mean=m, std=s.clamp(min=1e-6))
 
     return img, pad_left, pad_bottom
 
