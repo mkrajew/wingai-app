@@ -18,6 +18,7 @@ import {
   loadImage,
   loadImageDimensions,
   renderTransformedImage,
+  renderThumbnail,
   canvasToBlob,
 } from "./utils/image";
 import type { ImageTransform } from "./utils/image";
@@ -32,6 +33,7 @@ export type ImageFile = {
   filename: string;
   file: File;
   previewUrl: string;
+  thumbUrl?: string;
   status: "new" | "uploading" | "edit" | "done" | "error";
   vector?: number[];
   check?: boolean;
@@ -54,6 +56,11 @@ const THEME_STORAGE_KEY = "wingai-theme";
 // the backend (whose inference is effectively serialized) while overlapping
 // client-side crop/encode with in-flight requests.
 const PROCESS_CONCURRENCY = 4;
+// Thumbnails for the upload list: render a small downscaled image once per
+// file so the browser never decodes full-resolution photos to paint a 56px
+// preview. Bounded concurrency keeps only a few full-res decodes in flight.
+const THUMBNAIL_MAX_EDGE = 128;
+const THUMBNAIL_CONCURRENCY = 3;
 
 const getInitialTheme = (): ThemeMode => {
   if (typeof window === "undefined") return "light";
@@ -74,6 +81,7 @@ function App() {
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const downloadNoticeTimeout = useRef<number | null>(null);
   const dimensionsRequestedRef = useRef(new Set<string>());
+  const thumbnailRequestedRef = useRef(new Set<string>());
   const [processing, setProcessing] = useState({
     inProgress: false,
     completed: 0,
@@ -148,7 +156,10 @@ function App() {
   function removeFile(name: string) {
     setImageFiles((prevFiles) => {
       const toRemove = prevFiles.find((f) => f.filename === name);
-      if (toRemove) URL.revokeObjectURL(toRemove.previewUrl);
+      if (toRemove) {
+        URL.revokeObjectURL(toRemove.previewUrl);
+        if (toRemove.thumbUrl) URL.revokeObjectURL(toRemove.thumbUrl);
+      }
 
       return prevFiles.filter((f) => f.filename !== name);
     });
@@ -191,13 +202,19 @@ function App() {
   }
 
   function clearFiles() {
-    imageFiles.forEach((it) => URL.revokeObjectURL(it.previewUrl));
+    imageFiles.forEach((it) => {
+      URL.revokeObjectURL(it.previewUrl);
+      if (it.thumbUrl) URL.revokeObjectURL(it.thumbUrl);
+    });
     setImageFiles([]);
   }
 
   function resetAll() {
     setImageFiles((prevFiles) => {
-      prevFiles.forEach((it) => URL.revokeObjectURL(it.previewUrl));
+      prevFiles.forEach((it) => {
+        URL.revokeObjectURL(it.previewUrl);
+        if (it.thumbUrl) URL.revokeObjectURL(it.thumbUrl);
+      });
       return [];
     });
     setStep("upload");
@@ -282,6 +299,7 @@ function App() {
     const newFile = new File([blob], image.filename, { type: mimeType, lastModified: Date.now() });
     const newPreviewUrl = URL.createObjectURL(blob);
     URL.revokeObjectURL(image.previewUrl);
+    if (image.thumbUrl) URL.revokeObjectURL(image.thumbUrl);
 
     setImageFiles((prev) =>
       prev.map((f, i) =>
@@ -290,6 +308,7 @@ function App() {
               ...f,
               file: newFile,
               previewUrl: newPreviewUrl,
+              thumbUrl: undefined,
               width,
               height,
               detections: undefined,
@@ -736,8 +755,47 @@ function App() {
   }, [imageFiles]);
 
   useEffect(() => {
+    // Generate a small thumbnail once per file (keyed by previewUrl) for the
+    // upload list, so the browser never decodes full-resolution photos to paint
+    // 56px previews. Flip/rotate/extract all produce a new previewUrl, so this
+    // picks them up automatically. Bounded concurrency avoids decoding many
+    // full-size images at once.
+    if (step !== "upload") return;
+    const requested = thumbnailRequestedRef.current;
+    const pending: string[] = [];
+    for (const file of imageFiles) {
+      if (file.thumbUrl || requested.has(file.previewUrl)) continue;
+      requested.add(file.previewUrl);
+      pending.push(file.previewUrl);
+    }
+    if (pending.length === 0) return;
+
+    void mapWithConcurrency(pending, THUMBNAIL_CONCURRENCY, async (previewUrl) => {
+      try {
+        const blob = await renderThumbnail(previewUrl, THUMBNAIL_MAX_EDGE);
+        const thumbUrl = URL.createObjectURL(blob);
+        setImageFiles((prevFiles) => {
+          if (!prevFiles.some((f) => f.previewUrl === previewUrl)) {
+            // File was removed or replaced while the thumbnail was rendering.
+            URL.revokeObjectURL(thumbUrl);
+            return prevFiles;
+          }
+          return prevFiles.map((f) =>
+            f.previewUrl === previewUrl ? { ...f, thumbUrl } : f,
+          );
+        });
+      } catch (error) {
+        console.warn("Failed to generate thumbnail.", error);
+      }
+    });
+  }, [imageFiles, step]);
+
+  useEffect(() => {
     return () => {
-      imageFiles.forEach((it) => URL.revokeObjectURL(it.previewUrl));
+      imageFiles.forEach((it) => {
+        URL.revokeObjectURL(it.previewUrl);
+        if (it.thumbUrl) URL.revokeObjectURL(it.thumbUrl);
+      });
     };
   }, []);
 

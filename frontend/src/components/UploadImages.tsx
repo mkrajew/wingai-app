@@ -313,14 +313,22 @@ function ImageListItem({ image, onRemove, onToggleSkipProcessing, onSelect }: Im
       style={{ cursor: "pointer" }}
     >
       <div className="position-relative" style={{ flexShrink: 0 }}>
-        <img
-          src={image.previewUrl}
-          alt={image.filename}
-          width={56}
-          height={56}
-          style={{ objectFit: "cover", display: "block" }}
-          className="rounded border"
-        />
+        {image.thumbUrl ? (
+          <img
+            src={image.thumbUrl}
+            alt={image.filename}
+            width={56}
+            height={56}
+            style={{ objectFit: "cover", display: "block" }}
+            className="rounded border"
+          />
+        ) : (
+          <div
+            className="rounded border"
+            style={{ width: 56, height: 56, background: "var(--bs-secondary-bg)" }}
+            aria-hidden="true"
+          />
+        )}
         {image.detections !== undefined && (
           <span
             className={`badge position-absolute bottom-0 end-0 ${

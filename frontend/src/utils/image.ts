@@ -77,3 +77,32 @@ export async function renderTransformedImage(
   const blob = await canvasToBlob(canvas, mimeType, quality);
   return { blob, width: canvas.width, height: canvas.height };
 }
+
+/**
+ * Renders a small, downscaled JPEG thumbnail of an image. Used for list
+ * previews so the browser never has to decode the full-resolution image just
+ * to paint a tiny thumbnail. Aspect ratio is preserved; `maxEdge` caps the
+ * longer side.
+ */
+export async function renderThumbnail(
+  src: string,
+  maxEdge: number,
+): Promise<Blob> {
+  const img = await loadImage(src);
+  const w = img.naturalWidth;
+  const h = img.naturalHeight;
+  const scale = Math.min(1, maxEdge / Math.max(w, h));
+  const tw = Math.max(1, Math.round(w * scale));
+  const th = Math.max(1, Math.round(h * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = tw;
+  canvas.height = th;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get canvas context");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, tw, th);
+
+  return canvasToBlob(canvas, "image/jpeg", 0.8);
+}
