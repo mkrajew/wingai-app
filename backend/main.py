@@ -1,3 +1,4 @@
+import asyncio
 from functools import partial
 from wings.modeling.unet import UNet
 from fastapi import FastAPI, UploadFile, File, Form
@@ -70,7 +71,8 @@ def process_image(image):
     except Exception as e:
         raise LoadImageError("Failed to load image") from e
 
-    output = models["model"](image_tensor.to(models["device"]).unsqueeze(0))
+    with torch.inference_mode():
+        output = models["model"](image_tensor.to(models["device"]).unsqueeze(0))
     mask = torch.round(output).squeeze().detach().cpu().numpy()
 
     mask_coords = final_coords(mask, x_size, y_size)
@@ -115,7 +117,8 @@ async def analyze(
     raw = await file.read()
     encoded = torch.frombuffer(bytearray(raw), dtype=torch.uint8)
 
-    coords, check = process_image(encoded)
+    loop = asyncio.get_event_loop()
+    coords, check = await loop.run_in_executor(None, process_image, encoded)
     return JSONResponse(content={"coords": coords, "check": check})
 
 
