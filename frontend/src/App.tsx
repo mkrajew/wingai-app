@@ -68,7 +68,7 @@ function App() {
   const [showDownloadNotice, setShowDownloadNotice] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const downloadNoticeTimeout = useRef<number | null>(null);
-  const pendingDimensionsRef = useRef(new Set<string>());
+  const dimensionsRequestedRef = useRef(new Set<string>());
   const [processing, setProcessing] = useState({
     inProgress: false,
     completed: 0,
@@ -690,39 +690,38 @@ function App() {
   }
 
   useEffect(() => {
-    if (imageFiles.length === 0) return;
-    const pending = pendingDimensionsRef.current;
+    // Each previewUrl is considered exactly once. After the first pass every
+    // file is in `requested`, so subsequent renders (e.g. landmark dragging,
+    // which updates imageFiles on every pointer move) short-circuit cheaply
+    // instead of re-scanning and re-querying dimensions.
+    const requested = dimensionsRequestedRef.current;
 
-    imageFiles.forEach((file) => {
-      const hasWidth =
-        typeof file.width === "number" && Number.isFinite(file.width);
-      const hasHeight =
-        typeof file.height === "number" && Number.isFinite(file.height);
-      if (hasWidth && hasHeight) return;
-      if (pending.has(file.previewUrl)) return;
+    for (const file of imageFiles) {
+      if (requested.has(file.previewUrl)) continue;
+      requested.add(file.previewUrl);
 
-      pending.add(file.previewUrl);
-      void loadImageDimensions(file.previewUrl)
+      const hasDimensions =
+        typeof file.width === "number" &&
+        Number.isFinite(file.width) &&
+        typeof file.height === "number" &&
+        Number.isFinite(file.height);
+      if (hasDimensions) continue;
+
+      const { previewUrl, filename } = file;
+      void loadImageDimensions(previewUrl)
         .then(({ width, height }) => {
           setImageFiles((prevFiles) =>
             prevFiles.map((item) =>
-              item.previewUrl === file.previewUrl
+              item.previewUrl === previewUrl
                 ? { ...item, width, height }
                 : item,
             ),
           );
         })
         .catch((error) => {
-          console.warn(
-            "Failed to read image dimensions.",
-            file.filename,
-            error,
-          );
-        })
-        .finally(() => {
-          pending.delete(file.previewUrl);
+          console.warn("Failed to read image dimensions.", filename, error);
         });
-    });
+    }
   }, [imageFiles]);
 
   useEffect(() => {
