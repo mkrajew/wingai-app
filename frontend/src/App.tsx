@@ -870,6 +870,16 @@ function App() {
   }, [step]);
 
   useEffect(() => {
+    if (imageFiles.length === 0 && step !== "review") return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [imageFiles.length, step]);
+
+  useEffect(() => {
     const root = document.documentElement;
     root.setAttribute("data-bs-theme", theme);
     window.localStorage.setItem(THEME_STORAGE_KEY, theme);
