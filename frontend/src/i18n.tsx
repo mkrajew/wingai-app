@@ -41,6 +41,8 @@ export type Translations = {
   edit: string;
   backToEditTitle: string;
   backToEditMessage: string;
+  resetTitle: string;
+  resetMessage: string;
   reset: string;
   delete: string;
   files: string;
@@ -128,6 +130,9 @@ const en: Translations = {
   backToEditTitle: "Return to editing?",
   backToEditMessage:
     "This will discard the current results and return to the edit page.",
+  resetTitle: "Reset everything?",
+  resetMessage:
+    "This will remove all images and results and return to the start.",
   reset: "Reset",
   delete: "Delete",
   files: "Files",
@@ -269,6 +274,9 @@ const pl: Translations = {
   backToEditTitle: "Wrócić do edycji?",
   backToEditMessage:
     "Spowoduje to odrzucenie bieżących wyników i powrót do strony edycji.",
+  resetTitle: "Zresetować wszystko?",
+  resetMessage:
+    "Spowoduje to usunięcie wszystkich zdjęć i wyników oraz powrót do początku.",
   reset: "Resetuj",
   delete: "Usuń",
   files: "Pliki",

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { addPngTextChunk, createZipBlob } from "../utils";
 import type { ImageFile } from "../App";
 import { useT } from "../i18n";
+import ConfirmDialog from "./ConfirmDialog";
 
 type ReviewImagesProps = {
   images: ImageFile[];
@@ -49,6 +50,7 @@ export default function ReviewImages({
   const [isPanning, setIsPanning] = useState(false);
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
   const [isEditConfirmOpen, setIsEditConfirmOpen] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [exportMetadata, setExportMetadata] = useState(true);
   const [exportCsv, setExportCsv] = useState(false);
   const disableActions = isProcessing;
@@ -420,7 +422,7 @@ export default function ReviewImages({
             <button
               type="button"
               className="btn btn-outline-secondary btn-sm"
-              onClick={onReset}
+              onClick={() => setIsResetConfirmOpen(true)}
             >
               {t.reset}
             </button>
@@ -828,67 +830,33 @@ export default function ReviewImages({
       )}
 
       {isEditConfirmOpen && (
-        <div
-          role="presentation"
-          onClick={() => setIsEditConfirmOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.4)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1100,
-            padding: "1rem",
+        <ConfirmDialog
+          title={t.backToEditTitle}
+          message={t.backToEditMessage}
+          confirmLabel={t.edit}
+          cancelLabel={t.cancel}
+          closeLabel={t.close}
+          onConfirm={() => {
+            setIsEditConfirmOpen(false);
+            onBackToEdit();
           }}
-        >
-          <div
-            role="dialog"
-            aria-label={t.backToEditTitle}
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: "min(90vw, 420px)",
-              background: "var(--bs-body-bg)",
-              borderRadius: "10px",
-              padding: "1rem",
-              boxShadow: "var(--bs-box-shadow-lg)",
-              border: "1px solid var(--bs-border-color)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.75rem",
-            }}
-          >
-            <div className="d-flex align-items-center justify-content-between">
-              <h4 className="mb-0">{t.backToEditTitle}</h4>
-              <button
-                type="button"
-                className="btn btn-close"
-                aria-label={t.close}
-                onClick={() => setIsEditConfirmOpen(false)}
-              />
-            </div>
-            <p className="mb-0 text-muted small">{t.backToEditMessage}</p>
-            <div className="d-flex justify-content-end gap-2">
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={() => setIsEditConfirmOpen(false)}
-              >
-                {t.cancel}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  setIsEditConfirmOpen(false);
-                  onBackToEdit();
-                }}
-              >
-                {t.edit}
-              </button>
-            </div>
-          </div>
-        </div>
+          onCancel={() => setIsEditConfirmOpen(false)}
+        />
+      )}
+
+      {isResetConfirmOpen && (
+        <ConfirmDialog
+          title={t.resetTitle}
+          message={t.resetMessage}
+          confirmLabel={t.reset}
+          cancelLabel={t.cancel}
+          closeLabel={t.close}
+          onConfirm={() => {
+            setIsResetConfirmOpen(false);
+            onReset();
+          }}
+          onCancel={() => setIsResetConfirmOpen(false)}
+        />
       )}
     </div>
   );
