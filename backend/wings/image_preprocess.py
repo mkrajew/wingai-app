@@ -81,16 +81,12 @@ def unet_fit_rectangle_preprocess(
         max_size=output_size,
     )
     _, h, w = img.shape
-    if w >= h:
-        pad_left = 0
-        pad_top = (output_size - h) // 2
-        pad_right = 0
-        pad_bottom = output_size - h - pad_top
-    else:
-        pad_left = (output_size - w) // 2
-        pad_top = 0
-        pad_right = output_size - w - pad_left
-        pad_bottom = 0
+    pad_h = output_size - h
+    pad_w = output_size - w
+    pad_top = pad_h // 2
+    pad_bottom = pad_h - pad_top
+    pad_left = pad_w // 2
+    pad_right = pad_w - pad_left
     img = F.pad(
         img, [pad_left, pad_top, pad_right, pad_bottom], padding_mode="constant", fill=0
     )
