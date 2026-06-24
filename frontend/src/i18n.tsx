@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 export type Lang = "EN" | "PL";
@@ -378,8 +378,25 @@ const LanguageContext = createContext<LanguageContextValue>({
   t: en,
 });
 
+const LANG_STORAGE_KEY = "wingai-lang";
+
+function isLang(value: unknown): value is Lang {
+  return value === "EN" || value === "PL";
+}
+
+function getInitialLang(): Lang {
+  if (typeof window === "undefined") return "EN";
+  const stored = window.localStorage.getItem(LANG_STORAGE_KEY);
+  return isLang(stored) ? stored : "EN";
+}
+
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>("EN");
+  const [lang, setLang] = useState<Lang>(getInitialLang);
+
+  useEffect(() => {
+    window.localStorage.setItem(LANG_STORAGE_KEY, lang);
+  }, [lang]);
+
   return (
     <LanguageContext.Provider value={{ lang, setLang, t: TRANSLATIONS[lang] }}>
       {children}
