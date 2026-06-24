@@ -20,6 +20,7 @@ type UploadImagesProps = {
   onToggleDetections: (index: number) => void;
   onDetectSingle: (index: number) => void;
   onFlipImage: (imageIndex: number, direction: "horizontal" | "vertical") => void;
+  onRotateImage: (imageIndex: number, direction: "cw" | "ccw") => void;
   onToggleSkipProcessing: (filename: string) => void;
   onSelectDetection: (imageIndex: number, detIndex: number) => void;
   onToggleDetectionExclusion: (imageIndex: number, detIndex: number) => void;
@@ -38,6 +39,7 @@ function UploadImages({
   onToggleDetections,
   onDetectSingle,
   onFlipImage,
+  onRotateImage,
   onToggleSkipProcessing,
   onSelectDetection,
   onToggleDetectionExclusion,
@@ -102,6 +104,7 @@ function UploadImages({
         onToggleDetectionExclusion={onToggleDetectionExclusion}
         onExtractDetections={onExtractDetections}
         onFlipImage={onFlipImage}
+        onRotateImage={onRotateImage}
         onToggleSkipProcessing={onToggleSkipProcessing}
         isDetecting={isDetecting}
       />

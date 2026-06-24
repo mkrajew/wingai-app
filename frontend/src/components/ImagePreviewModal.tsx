@@ -19,6 +19,7 @@ export type ImagePreviewModalProps = {
   onToggleDetectionExclusion: (imageIndex: number, detIndex: number) => void;
   onExtractDetections: (imageIndex: number) => void;
   onFlipImage: (imageIndex: number, direction: "horizontal" | "vertical") => void;
+  onRotateImage: (imageIndex: number, direction: "cw" | "ccw") => void;
   onToggleSkipProcessing: (filename: string) => void;
   isDetecting: boolean;
 };
@@ -36,6 +37,7 @@ export default function ImagePreviewModal({
   onToggleDetectionExclusion,
   onExtractDetections,
   onFlipImage,
+  onRotateImage,
   onToggleSkipProcessing,
   isDetecting,
 }: ImagePreviewModalProps) {
@@ -458,6 +460,22 @@ export default function ImagePreviewModal({
               onClick={() => { if (previewIndex !== null) onFlipImage(previewIndex, "vertical"); }}
             >
               {t.flipVertical}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              title={t.rotateCcw}
+              onClick={() => { if (previewIndex !== null) onRotateImage(previewIndex, "ccw"); }}
+            >
+              {t.rotateCcw}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              title={t.rotateCw}
+              onClick={() => { if (previewIndex !== null) onRotateImage(previewIndex, "cw"); }}
+            >
+              {t.rotateCw}
             </button>
           </div>
           <button

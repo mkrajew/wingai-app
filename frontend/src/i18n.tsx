@@ -74,6 +74,8 @@ export type Translations = {
   processImage: string;
   flipHorizontal: string;
   flipVertical: string;
+  rotateCw: string;
+  rotateCcw: string;
 
   // Help panel
   help: string;
@@ -149,6 +151,8 @@ const en: Translations = {
   processImage: "Process",
   flipHorizontal: "↔ Flip H",
   flipVertical: "↕ Flip V",
+  rotateCw: "↻ 90°",
+  rotateCcw: "↺ 90°",
 
   help: "Help",
   howToUse: "How to use WingAI",
@@ -278,6 +282,8 @@ const pl: Translations = {
   processImage: "Przetwarzaj",
   flipHorizontal: "↔ Odwróć poziomo",
   flipVertical: "↕ Odwróć pionowo",
+  rotateCw: "↻ 90°",
+  rotateCcw: "↺ 90°",
 
   help: "Pomoc",
   howToUse: "Jak używać WingAI",
