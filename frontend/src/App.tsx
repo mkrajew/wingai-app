@@ -82,6 +82,12 @@ function App() {
   const downloadNoticeTimeout = useRef<number | null>(null);
   const dimensionsRequestedRef = useRef(new Set<string>());
   const thumbnailRequestedRef = useRef(new Set<string>());
+  // Ref drives a synchronous re-entry guard (catches same-tick double clicks);
+  // the state drives the spinner overlay in the preview modal.
+  const transformingRef = useRef(new Set<string>());
+  const [transformingFiles, setTransformingFiles] = useState<Set<string>>(
+    new Set(),
+  );
   const [processing, setProcessing] = useState({
     inProgress: false,
     completed: 0,
@@ -278,49 +284,64 @@ function App() {
     const image = imageFiles[imageIndex];
     if (!image) return;
 
+    const filename = image.filename;
+    // Ignore extra clicks while this image is already being transformed.
+    if (transformingRef.current.has(filename)) return;
+    transformingRef.current.add(filename);
+    setTransformingFiles((prev) => new Set(prev).add(filename));
+
     const mimeType = image.file.type || "image/jpeg";
     const quality = mimeType === "image/jpeg" ? 0.95 : undefined;
 
-    let blob: Blob;
-    let width: number;
-    let height: number;
     try {
-      ({ blob, width, height } = await renderTransformedImage(
-        image.previewUrl,
-        transform,
-        mimeType,
-        quality,
-      ));
-    } catch (err) {
-      console.warn("Failed to transform image.", image.filename, err);
-      return;
+      let blob: Blob;
+      let width: number;
+      let height: number;
+      try {
+        ({ blob, width, height } = await renderTransformedImage(
+          image.previewUrl,
+          transform,
+          mimeType,
+          quality,
+        ));
+      } catch (err) {
+        console.warn("Failed to transform image.", filename, err);
+        return;
+      }
+
+      const newFile = new File([blob], image.filename, { type: mimeType, lastModified: Date.now() });
+      const newPreviewUrl = URL.createObjectURL(blob);
+      URL.revokeObjectURL(image.previewUrl);
+      if (image.thumbUrl) URL.revokeObjectURL(image.thumbUrl);
+
+      setImageFiles((prev) =>
+        prev.map((f, i) =>
+          i === imageIndex
+            ? {
+                ...f,
+                file: newFile,
+                previewUrl: newPreviewUrl,
+                thumbUrl: undefined,
+                width,
+                height,
+                detections: undefined,
+                selectedDetectionIndex: undefined,
+                excludedDetections: undefined,
+                vector: undefined,
+                check: undefined,
+                status: "new",
+              }
+            : f,
+        ),
+      );
+    } finally {
+      transformingRef.current.delete(filename);
+      setTransformingFiles((prev) => {
+        const next = new Set(prev);
+        next.delete(filename);
+        return next;
+      });
     }
-
-    const newFile = new File([blob], image.filename, { type: mimeType, lastModified: Date.now() });
-    const newPreviewUrl = URL.createObjectURL(blob);
-    URL.revokeObjectURL(image.previewUrl);
-    if (image.thumbUrl) URL.revokeObjectURL(image.thumbUrl);
-
-    setImageFiles((prev) =>
-      prev.map((f, i) =>
-        i === imageIndex
-          ? {
-              ...f,
-              file: newFile,
-              previewUrl: newPreviewUrl,
-              thumbUrl: undefined,
-              width,
-              height,
-              detections: undefined,
-              selectedDetectionIndex: undefined,
-              excludedDetections: undefined,
-              vector: undefined,
-              check: undefined,
-              status: "new",
-            }
-          : f,
-      ),
-    );
   }
 
   const handleFlipImage = (
@@ -976,6 +997,7 @@ function App() {
             onToggleSkipProcessing={handleToggleSkipProcessing}
             onToggleDetectionExclusion={handleToggleDetectionExclusion}
             onExtractDetections={handleExtractDetections}
+            transformingFiles={transformingFiles}
           />
         )}
         {step === "review" && (

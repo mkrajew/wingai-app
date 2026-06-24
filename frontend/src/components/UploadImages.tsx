@@ -25,6 +25,7 @@ type UploadImagesProps = {
   onSelectDetection: (imageIndex: number, detIndex: number) => void;
   onToggleDetectionExclusion: (imageIndex: number, detIndex: number) => void;
   onExtractDetections: (imageIndex: number) => void;
+  transformingFiles: Set<string>;
 };
 function UploadImages({
   images,
@@ -44,6 +45,7 @@ function UploadImages({
   onSelectDetection,
   onToggleDetectionExclusion,
   onExtractDetections,
+  transformingFiles,
 }: UploadImagesProps) {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [filterText, setFilterText] = useState("");
@@ -107,6 +109,7 @@ function UploadImages({
         onRotateImage={onRotateImage}
         onToggleSkipProcessing={onToggleSkipProcessing}
         isDetecting={isDetecting}
+        transformingFiles={transformingFiles}
       />
     </>
   );

@@ -22,6 +22,7 @@ export type ImagePreviewModalProps = {
   onRotateImage: (imageIndex: number, direction: "cw" | "ccw") => void;
   onToggleSkipProcessing: (filename: string) => void;
   isDetecting: boolean;
+  transformingFiles: Set<string>;
 };
 
 export default function ImagePreviewModal({
@@ -40,10 +41,14 @@ export default function ImagePreviewModal({
   onRotateImage,
   onToggleSkipProcessing,
   isDetecting,
+  transformingFiles,
 }: ImagePreviewModalProps) {
   const t = useT();
   const previewImage =
     previewIndex === null ? null : images[previewIndex] ?? null;
+  const isTransforming = previewImage
+    ? transformingFiles.has(previewImage.filename)
+    : false;
   const [previewDimensions, setPreviewDimensions] = useState<{
     width: number;
     height: number;
@@ -423,6 +428,24 @@ export default function ImagePreviewModal({
                   cursor: hoveredDetIndex !== null ? "pointer" : "default",
                 }}
               />
+            )}
+            {isTransforming && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "rgba(0, 0, 0, 0.25)",
+                }}
+              >
+                <span
+                  className="spinner-border text-light"
+                  role="status"
+                  aria-hidden="true"
+                />
+              </div>
             )}
           </div>
         </div>
