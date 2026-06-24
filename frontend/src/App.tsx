@@ -14,6 +14,7 @@ import {
   ensureUniqueFilename,
   ensureUniqueFilenameFromSet,
 } from "./utils/filename";
+import { loadImage, loadImageDimensions } from "./utils/image";
 import { useT } from "./i18n";
 
 export default App;
@@ -73,15 +74,6 @@ function App() {
     total: 0,
   });
   const [detectionError, setDetectionError] = useState<string | null>(null);
-
-  function loadImage(src: string) {
-    return new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("Failed to load image"));
-      img.src = src;
-    });
-  }
 
   async function resizeImageForUpload(
     file: File,
@@ -485,11 +477,6 @@ function App() {
         return nextFile;
       }),
     );
-  }
-
-  async function loadImageDimensions(src: string) {
-    const img = await loadImage(src);
-    return { width: img.naturalWidth, height: img.naturalHeight };
   }
 
   async function convertJpegToPng(file: File, targetName: string) {
