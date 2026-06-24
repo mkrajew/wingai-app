@@ -14,7 +14,12 @@ import {
   ensureUniqueFilename,
   ensureUniqueFilenameFromSet,
 } from "./utils/filename";
-import { loadImage, loadImageDimensions } from "./utils/image";
+import {
+  loadImage,
+  loadImageDimensions,
+  renderTransformedImage,
+} from "./utils/image";
+import type { ImageTransform } from "./utils/image";
 import { useT } from "./i18n";
 
 export default App;
@@ -251,31 +256,28 @@ function App() {
     }
   }
 
-  async function handleFlipImage(imageIndex: number, direction: "horizontal" | "vertical") {
+  async function handleTransformImage(
+    imageIndex: number,
+    transform: ImageTransform,
+  ) {
     const image = imageFiles[imageIndex];
     if (!image) return;
 
-    const srcImg = await loadImage(image.previewUrl);
-    const canvas = document.createElement("canvas");
-    canvas.width = srcImg.naturalWidth;
-    canvas.height = srcImg.naturalHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    if (direction === "horizontal") {
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
-    } else {
-      ctx.translate(0, canvas.height);
-      ctx.scale(1, -1);
-    }
-    ctx.drawImage(srcImg, 0, 0);
-
     const mimeType = image.file.type || "image/jpeg";
     const quality = mimeType === "image/jpeg" ? 0.95 : undefined;
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Flip failed"))), mimeType, quality);
-    });
+
+    let blob: Blob;
+    try {
+      blob = await renderTransformedImage(
+        image.previewUrl,
+        transform,
+        mimeType,
+        quality,
+      );
+    } catch (err) {
+      console.warn("Failed to transform image.", image.filename, err);
+      return;
+    }
 
     const newFile = new File([blob], image.filename, { type: mimeType, lastModified: Date.now() });
     const newPreviewUrl = URL.createObjectURL(blob);
@@ -300,54 +302,13 @@ function App() {
     );
   }
 
-  async function handleRotateImage(imageIndex: number, direction: "cw" | "ccw") {
-    const image = imageFiles[imageIndex];
-    if (!image) return;
+  const handleFlipImage = (
+    imageIndex: number,
+    direction: "horizontal" | "vertical",
+  ) => handleTransformImage(imageIndex, { type: "flip", axis: direction });
 
-    const srcImg = await loadImage(image.previewUrl);
-    const canvas = document.createElement("canvas");
-    canvas.width = srcImg.naturalHeight;
-    canvas.height = srcImg.naturalWidth;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    if (direction === "cw") {
-      ctx.translate(canvas.width, 0);
-      ctx.rotate(Math.PI / 2);
-    } else {
-      ctx.translate(0, canvas.height);
-      ctx.rotate(-Math.PI / 2);
-    }
-    ctx.drawImage(srcImg, 0, 0);
-
-    const mimeType = image.file.type || "image/jpeg";
-    const quality = mimeType === "image/jpeg" ? 0.95 : undefined;
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Rotate failed"))), mimeType, quality);
-    });
-
-    const newFile = new File([blob], image.filename, { type: mimeType, lastModified: Date.now() });
-    const newPreviewUrl = URL.createObjectURL(blob);
-    URL.revokeObjectURL(image.previewUrl);
-
-    setImageFiles((prev) =>
-      prev.map((f, i) =>
-        i === imageIndex
-          ? {
-              ...f,
-              file: newFile,
-              previewUrl: newPreviewUrl,
-              detections: undefined,
-              selectedDetectionIndex: undefined,
-              excludedDetections: undefined,
-              vector: undefined,
-              check: undefined,
-              status: "new",
-            }
-          : f,
-      ),
-    );
-  }
+  const handleRotateImage = (imageIndex: number, direction: "cw" | "ccw") =>
+    handleTransformImage(imageIndex, { type: "rotate", direction });
 
   function handleToggleSkipProcessing(filename: string) {
     setImageFiles((prev) =>
