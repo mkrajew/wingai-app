@@ -93,7 +93,10 @@ export type Translations = {
   workflowLabel: string;
   keyboardShortcutsLabel: string;
   steps: { step: string; detail: string }[];
-  shortcuts: { context: string; rows: { keys: string[]; description: string }[] }[];
+  shortcuts: {
+    context: string;
+    rows: { keys: string[]; description: string }[];
+  }[];
 };
 
 const en: Translations = {
@@ -182,31 +185,38 @@ const en: Translations = {
   steps: [
     {
       step: "Upload images",
-      detail: "Drag & drop or click to select images. Supported formats: JPEG, PNG, WebP.",
+      detail:
+        "Drag & drop or click to select images. Supported formats: JPEG and PNG.",
     },
     {
       step: "Load the detection model",
-      detail: 'Open "Detection model" in the header and click "Load model". The model is cached in the browser — you only need to do this once.',
+      detail:
+        'Open "Detection model" in the header and click "Load model". The model is cached in the browser — you only need to do this once.',
     },
     {
       step: "Detect objects",
-      detail: 'Click "Detect" to run detection on all images. Images already detected or marked as Skip are skipped automatically. You can also detect a single image from its preview.',
+      detail:
+        'Click "Detect" to run detection on all images. Images already detected or marked as Skip are skipped automatically. You can also detect a single image from its preview.',
     },
     {
       step: "Review bounding boxes",
-      detail: "Open a preview to see all detected bounding boxes. Use the checkbox on each box to include/exclude it from extracting. The green box is the one used for cropping. You can also flip the image or extract each detected wing as a separate image.",
+      detail:
+        'Open a preview to see all detected bounding boxes. The green box is used for cropping — if multiple wings are detected, click a box to select it as the crop target. To extract wings as separate images, click "Extract wings". Use the checkbox on each box to control which ones are included in the extraction.',
     },
     {
       step: "Process",
-      detail: "Use the Process/Skip toggle per image to control which images are sent to processing. Skipped images are excluded entirely.",
+      detail:
+        "Use the Process/Skip toggle per image to control which images are sent to processing.",
     },
     {
       step: "Review results",
-      detail: "After processing, inspect the results. You can edit landmark positions directly on the image and zoom in and out for precise adjustments.",
+      detail:
+        "After processing, inspect the results. You can edit landmark positions directly on the image and zoom in and out for precise adjustments.",
     },
     {
       step: "Download data",
-      detail: "Export your results in CSV format for spreadsheet analysis, or in Identifly format for direct use in the Identifly workflow.",
+      detail:
+        "Export your results in CSV format for spreadsheet analysis, or in IdentiFly format for direct use in the IdentiFly workflow.",
     },
   ],
   shortcuts: [
@@ -217,8 +227,14 @@ const en: Translations = {
         { keys: ["B"], description: "Toggle bounding box on / off" },
         { keys: ["Tab"], description: "Select next bounding box" },
         { keys: ["Shift", "Tab"], description: "Select previous bounding box" },
-        { keys: ["H"], description: "Flip image horizontally (clears detections)" },
-        { keys: ["V"], description: "Flip image vertically (clears detections)" },
+        {
+          keys: ["H"],
+          description: "Flip image horizontally (clears detections)",
+        },
+        {
+          keys: ["V"],
+          description: "Flip image vertically (clears detections)",
+        },
         { keys: ["N"], description: "Focus filename to rename" },
         { keys: ["Enter"], description: "Confirm rename" },
         { keys: ["Delete"], description: "Delete current image" },
@@ -326,31 +342,38 @@ const pl: Translations = {
   steps: [
     {
       step: "Prześlij zdjęcia",
-      detail: "Przeciągnij i upuść lub kliknij, aby wybrać zdjęcia. Obsługiwane formaty: JPEG, PNG.",
+      detail:
+        "Przeciągnij i upuść zdjęcia lub kliknij, aby je wybrać. Obsługiwane formaty: JPEG i PNG.",
     },
     {
       step: "Załaduj model wykrywania",
-      detail: 'Otwórz „Model wykrywania" w nagłówku i kliknij „Załaduj model". Model jest zapisywany w przeglądarce — wystarczy zrobić to raz.',
+      detail:
+        'Otwórz sekcję „Model wykrywania" w nagłówku i kliknij „Załaduj model". Model zostaje zapisany w przeglądarce, dlatego wystarczy wykonać tę czynność jednorazowo.',
     },
     {
       step: "Wykryj obiekty",
-      detail: 'Kliknij „Wykryj", aby uruchomić wykrywanie na skrzydeł wszystkich zdjęciach. Zdjęcia już wykryte lub oznaczone jako Pomiń są automatycznie pomijane. Możesz też uruchomić wykrywanie na pojedynczym zdjęciu z jego podglądu.',
+      detail:
+        'Kliknij „Wykryj", aby uruchomić wykrywanie na wszystkich zdjęciach. Zdjęcia już przetworzone lub oznaczone jako Pomiń są automatycznie wyłączane z tego procesu. Wykrywanie można również uruchomić dla pojedynczego zdjęcia z jego podglądu.',
     },
     {
       step: "Przejrzyj ramki",
-      detail: "Otwórz podgląd, aby zobaczyć wszystkie wykryte ramki. Użyj pola wyboru przy każdej ramce, aby uwzględnić lub wykluczyć ją z wyodrębniania. Zielona ramka jest używana do przycinania. Możesz też odwrócić zdjęcie lub wyodrębnić każde skrzydło jako osobny plik.",
+      detail:
+        'Otwórz podgląd, aby zobaczyć wszystkie wykryte ramki. Zielona ramka wskazuje obszar przycinania — jeśli na zdjęciu wykryto więcej skrzydeł, należy kliknąć wybraną ramkę, aby ją ustawić jako obszar docelowy. Aby wyodrębnić skrzydła jako osobne pliki, kliknij „Wyodrębnij skrzydła". Pola wyboru przy poszczególnych ramkach umożliwiają określenie, które z nich zostaną uwzględnione w eksporcie.',
     },
     {
       step: "Przetwórz",
-      detail: "Użyj przełącznika Przetwórz/Pomiń przy każdym zdjęciu, aby kontrolować, które zdjęcia trafią do przetwarzania. Pominięte zdjęcia są całkowicie wykluczone.",
+      detail:
+        "Za pomocą przełącznika Przetwórz/Pomiń przy każdym zdjęciu można określić, które z nich zostaną poddane przetwarzaniu. Zdjęcia oznaczone jako Pomiń są całkowicie wyłączone z dalszej analizy.",
     },
     {
       step: "Przejrzyj wyniki",
-      detail: "Po przetworzeniu sprawdź wyniki. Możesz edytować pozycje punktów charakterystycznych bezpośrednio na zdjęciu i powiększać obraz dla dokładnych korekt.",
+      detail:
+        "Po zakończeniu przetwarzania należy zweryfikować uzyskane wyniki. Pozycje punktów charakterystycznych można edytować bezpośrednio na zdjęciu, a funkcja powiększenia umożliwia wprowadzanie precyzyjnych korekt.",
     },
     {
       step: "Pobierz dane",
-      detail: "Eksportuj wyniki w formacie CSV do analizy w arkuszu kalkulacyjnym lub w formacie Identifly do bezpośredniego użycia w przepływie pracy Identifly.",
+      detail:
+        "Wyniki można wyeksportować w formacie CSV, w celu dalszej analizy w arkuszu kalkulacyjnym, lub w formacie Identifly, do bezpośredniego wykorzystania w przepływie pracy Identifly.",
     },
   ],
   shortcuts: [
