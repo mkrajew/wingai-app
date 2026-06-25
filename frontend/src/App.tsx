@@ -240,6 +240,8 @@ function App() {
     }
     setStep("upload");
     setReviewIndex(0);
+    setEditConfirmTrigger(0);
+    setResetConfirmTrigger(0);
   }
 
   async function handleDetect() {
