@@ -93,6 +93,7 @@ function App() {
   // Ref drives a synchronous re-entry guard (catches same-tick double clicks);
   // the state drives the spinner overlay in the preview modal.
   const transformingRef = useRef(new Set<string>());
+  const processingAbortRef = useRef<AbortController | null>(null);
   const [transformingFiles, setTransformingFiles] = useState<Set<string>>(
     new Set(),
   );
@@ -224,6 +225,7 @@ function App() {
   }
 
   function resetAll() {
+    processingAbortRef.current?.abort();
     setImageFiles((prevFiles) => {
       prevFiles.forEach((it) => {
         URL.revokeObjectURL(it.previewUrl);
@@ -547,6 +549,7 @@ function App() {
     image: ImageFile,
     width: number,
     height: number,
+    signal: AbortSignal,
   ) {
     const formData = new FormData();
     const uploadBlob = await resizeImageForUpload(image.file, width, height);
@@ -557,6 +560,7 @@ function App() {
     const response = await fetch("/api/analyze", {
       method: "POST",
       body: formData,
+      signal,
     });
 
     if (!response.ok) {
@@ -641,6 +645,10 @@ function App() {
   ) {
     if (images.length === 0) return [];
 
+    const abortController = new AbortController();
+    processingAbortRef.current = abortController;
+    const { signal } = abortController;
+
     setProcessing({ inProgress: true, completed: 0, total: images.length });
 
     try {
@@ -686,6 +694,7 @@ function App() {
               prepared,
               width,
               height,
+              signal,
             );
             return {
               ...prepared,
@@ -697,6 +706,7 @@ function App() {
               height,
             };
           } catch (error) {
+            if (signal.aborted) throw error;
             const message =
               error instanceof Error ? error.message : "Unknown error";
             console.error("Backend analysis failed.", image.filename, error);
@@ -708,10 +718,12 @@ function App() {
               height,
             };
           } finally {
-            setProcessing((prev) => ({
-              ...prev,
-              completed: Math.min(prev.total, prev.completed + 1),
-            }));
+            if (!signal.aborted) {
+              setProcessing((prev) => ({
+                ...prev,
+                completed: Math.min(prev.total, prev.completed + 1),
+              }));
+            }
           }
         },
       );
@@ -724,6 +736,7 @@ function App() {
           : { ...file, filename: uniqueName };
       });
     } finally {
+      processingAbortRef.current = null;
       setProcessing((prev) => ({ ...prev, inProgress: false }));
     }
   }
@@ -738,11 +751,18 @@ function App() {
     setStep("review");
     setReviewIndex(0);
 
-    const processed = await processImagesWithBackend(toProcess);
-    setImageFiles(processed);
+    try {
+      const processed = await processImagesWithBackend(toProcess);
+      setImageFiles(processed);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        throw error;
+      }
+    }
   }
 
   function handleBackToEdit() {
+    processingAbortRef.current?.abort();
     const snapshot = uploadSnapshot;
     if (!snapshot) return;
 
