@@ -762,6 +762,8 @@ function App() {
     setUploadSnapshot(null);
     setStep("upload");
     setReviewIndex(0);
+    setEditConfirmTrigger(0);
+    setResetConfirmTrigger(0);
   }
 
   useEffect(() => {
