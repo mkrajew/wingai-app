@@ -461,6 +461,10 @@ export default function ImagePreviewModal({
             onRename(previewIndex, renameValue.trim());
             event.currentTarget.blur();
           }}
+          onBlur={() => {
+            if (!renameValue.trim() || previewIndex === null) return;
+            onRename(previewIndex, renameValue.trim());
+          }}
         />
         <div className="text-center text-muted">
           {formatBytes(previewImage.file.size)}

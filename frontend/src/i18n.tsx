@@ -43,6 +43,8 @@ export type Translations = {
   backToEditMessage: string;
   resetTitle: string;
   resetMessage: string;
+  clearTitle: string;
+  clearMessage: string;
   reset: string;
   delete: string;
   files: string;
@@ -73,8 +75,6 @@ export type Translations = {
   // Image preview modal
   imagePreviewOf: (index: number, total: number) => string;
   unknownType: string;
-  boundingBoxOn: string;
-  boundingBoxOff: string;
   boundingBoxesOn: string;
   boundingBoxesOff: string;
   confidenceOn: string;
@@ -133,6 +133,8 @@ const en: Translations = {
   resetTitle: "Reset everything?",
   resetMessage:
     "This will remove all images and results and return to the start.",
+  clearTitle: "Clear all images?",
+  clearMessage: "This will remove all uploaded images.",
   reset: "Reset",
   delete: "Delete",
   files: "Files",
@@ -161,8 +163,6 @@ const en: Translations = {
 
   imagePreviewOf: (i, t) => `Image ${i} of ${t}`,
   unknownType: "unknown type",
-  boundingBoxOn: "Bounding box on",
-  boundingBoxOff: "Bounding box off",
   boundingBoxesOn: "Bounding boxes on",
   boundingBoxesOff: "Bounding boxes off",
   confidenceOn: "Confidence on",
@@ -277,6 +277,8 @@ const pl: Translations = {
   resetTitle: "Zresetować wszystko?",
   resetMessage:
     "Spowoduje to usunięcie wszystkich zdjęć i wyników oraz powrót do początku.",
+  clearTitle: "Wyczyścić wszystkie zdjęcia?",
+  clearMessage: "Spowoduje to usunięcie wszystkich przesłanych zdjęć.",
   reset: "Resetuj",
   delete: "Usuń",
   files: "Pliki",
@@ -305,8 +307,6 @@ const pl: Translations = {
 
   imagePreviewOf: (i, t) => `Zdjęcie ${i} z ${t}`,
   unknownType: "nieznany format",
-  boundingBoxOn: "Ramka włączona",
-  boundingBoxOff: "Ramka wyłączona",
   boundingBoxesOn: "Ramki włączone",
   boundingBoxesOff: "Ramki wyłączone",
   confidenceOn: "Pewność włączona",

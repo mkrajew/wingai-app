@@ -3,6 +3,7 @@ import type { ImageFile } from "../App";
 import { useDropzone } from "react-dropzone";
 import { formatBytes } from "../utils";
 import ImagePreviewModal from "./ImagePreviewModal";
+import ConfirmDialog from "./ConfirmDialog";
 import { useT } from "../i18n";
 
 export default UploadImages;
@@ -194,6 +195,7 @@ function ImageList({
   onPreviewFirst,
 }: ImageListProps) {
   const t = useT();
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   if (totalCount === 0) return null;
   return (
     <div className="d-flex flex-column mt-3">
@@ -227,7 +229,7 @@ function ImageList({
           <button
             type="button"
             className="btn btn-outline-secondary"
-            onClick={clearFiles}
+            onClick={() => setIsClearConfirmOpen(true)}
           >
             {t.clear}
           </button>
@@ -277,6 +279,20 @@ function ImageList({
           ))
         )}
       </ul>
+      {isClearConfirmOpen && (
+        <ConfirmDialog
+          title={t.clearTitle}
+          message={t.clearMessage}
+          confirmLabel={t.clear}
+          cancelLabel={t.cancel}
+          closeLabel={t.close}
+          onConfirm={() => {
+            setIsClearConfirmOpen(false);
+            clearFiles();
+          }}
+          onCancel={() => setIsClearConfirmOpen(false)}
+        />
+      )}
     </div>
   );
 }
