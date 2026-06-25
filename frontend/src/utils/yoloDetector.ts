@@ -1,4 +1,5 @@
 import * as ort from "onnxruntime-web/wasm";
+import { MODEL_URL, CACHE_NAME } from "./modelCache";
 
 // Serve WASM/MJS files from the root so their filenames stay unhashed.
 // The ortAssetsPlugin in vite.config.ts copies them there during build
@@ -23,9 +24,6 @@ export type Detection = {
 
 export const CLASS_NAMES: string[] = ["object"];
 
-const CACHE_NAME = "wingai-models-v1";
-const MODEL_URL = "/models/detector.onnx";
-
 // Defaults chosen to match Ultralytics inference (`YOLO(...).predict(img)`):
 // - imgsz 640 (used only for dynamic-input ONNX; static-input models use their
 //   declared HxW from the model graph).
@@ -35,7 +33,7 @@ const MODEL_URL = "/models/detector.onnx";
 const DEFAULT_IMGSZ = 640;
 const STRIDE = 32;
 const PAD_COLOR = 114;
-const CONF_THRESHOLD = 0.25;
+const CONF_THRESHOLD = 0.05;
 const IOU_THRESHOLD = 0.7;
 
 // ─── Session singleton ────────────────────────────────────────────────────────

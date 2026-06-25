@@ -1,7 +1,9 @@
+import asyncio
 from functools import partial
 from wings.modeling.unet import UNet
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
+from loguru import logger
 
 import torch
 from contextlib import asynccontextmanager
@@ -70,7 +72,8 @@ def process_image(image):
     except Exception as e:
         raise LoadImageError("Failed to load image") from e
 
-    output = models["model"](image_tensor.to(models["device"]).unsqueeze(0))
+    with torch.inference_mode():
+        output = models["model"](image_tensor.to(models["device"]).unsqueeze(0))
     mask = torch.round(output).squeeze().detach().cpu().numpy()
 
     mask_coords = final_coords(mask, x_size, y_size)
@@ -113,9 +116,22 @@ async def analyze(
     file: UploadFile = File(...), x_size: int = Form(...), y_size: int = Form(...)
 ):
     raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=422, detail="Uploaded file is empty.")
+
     encoded = torch.frombuffer(bytearray(raw), dtype=torch.uint8)
 
-    coords, check = process_image(encoded)
+    loop = asyncio.get_event_loop()
+    try:
+        coords, check = await loop.run_in_executor(None, process_image, encoded)
+    except LoadImageError:
+        raise HTTPException(
+            status_code=422, detail="Could not decode the uploaded image."
+        )
+    except Exception:
+        logger.exception(f"Image analysis failed for {file.filename!r}")
+        raise HTTPException(status_code=500, detail="Image analysis failed.")
+
     return JSONResponse(content={"coords": coords, "check": check})
 
 

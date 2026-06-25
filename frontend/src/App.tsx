@@ -1,10 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import UploadImages from "./components/UploadImages";
 import ReviewImages from "./components/ReviewImages";
+import ConfirmDialog from "./components/ConfirmDialog";
 import DetectionModelPanel from "./components/DetectionModelPanel";
 import HelpPanel from "./components/HelpPanel";
+import LanguageSwitcher from "./components/LanguageSwitcher";
 import { detectFromUrl } from "./utils/yoloDetector";
 import type { Detection } from "./utils/yoloDetector";
+import {
+  fileKey,
+  isJpegFile,
+  toPngFilename,
+  toDwPngFilename,
+  ensureUniqueFilename,
+  ensureUniqueFilenameFromSet,
+} from "./utils/filename";
+import {
+  loadImage,
+  loadImageDimensions,
+  renderTransformedImage,
+  renderThumbnail,
+  canvasToBlob,
+} from "./utils/image";
+import type { ImageTransform } from "./utils/image";
+import { mapWithConcurrency } from "./utils/async";
+import { useT } from "./i18n";
 
 export default App;
 
@@ -14,6 +34,7 @@ export type ImageFile = {
   filename: string;
   file: File;
   previewUrl: string;
+  thumbUrl?: string;
   status: "new" | "uploading" | "edit" | "done" | "error";
   vector?: number[];
   check?: boolean;
@@ -22,6 +43,9 @@ export type ImageFile = {
   error?: string;
   detections?: Detection[];
   showDetections?: boolean;
+  selectedDetectionIndex?: number;
+  excludedDetections?: number[];
+  skipProcessing?: boolean;
 };
 
 type ThemeMode = "light" | "dark";
@@ -29,6 +53,15 @@ type ThemeMode = "light" | "dark";
 const UPLOAD_MAX_EDGE = 400;
 const ENABLE_UPLOAD_RESIZE = false;
 const THEME_STORAGE_KEY = "wingai-theme";
+// Max images processed concurrently. Keeps memory bounded and avoids flooding
+// the backend (whose inference is effectively serialized) while overlapping
+// client-side crop/encode with in-flight requests.
+const PROCESS_CONCURRENCY = 4;
+// Thumbnails for the upload list: render a small downscaled image once per
+// file so the browser never decodes full-resolution photos to paint a 56px
+// preview. Bounded concurrency keeps only a few full-res decodes in flight.
+const THUMBNAIL_MAX_EDGE = 128;
+const THUMBNAIL_CONCURRENCY = 3;
 
 const getInitialTheme = (): ThemeMode => {
   if (typeof window === "undefined") return "light";
@@ -41,13 +74,29 @@ const getInitialTheme = (): ThemeMode => {
 };
 
 function App() {
+  const t = useT();
   const [imageFiles, setImageFiles] = useState<ImageFile[]>([]);
   const [step, setStep] = useState<"upload" | "review">("upload");
+  // Preserved copy of the edit-page list captured when Process is clicked, so
+  // "Edit" can restore the original images (including skipped ones) after
+  // processing has replaced the working list with cropped/renamed results.
+  const [uploadSnapshot, setUploadSnapshot] = useState<ImageFile[] | null>(null);
   const [reviewIndex, setReviewIndex] = useState(0);
   const [showDownloadNotice, setShowDownloadNotice] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+  const [editConfirmTrigger, setEditConfirmTrigger] = useState(0);
+  const [resetConfirmTrigger, setResetConfirmTrigger] = useState(0);
+  const [isUploadResetConfirmOpen, setIsUploadResetConfirmOpen] = useState(false);
   const downloadNoticeTimeout = useRef<number | null>(null);
-  const pendingDimensionsRef = useRef(new Set<string>());
+  const dimensionsRequestedRef = useRef(new Set<string>());
+  const thumbnailRequestedRef = useRef(new Set<string>());
+  // Ref drives a synchronous re-entry guard (catches same-tick double clicks);
+  // the state drives the spinner overlay in the preview modal.
+  const transformingRef = useRef(new Set<string>());
+  const processingAbortRef = useRef<AbortController | null>(null);
+  const [transformingFiles, setTransformingFiles] = useState<Set<string>>(
+    new Set(),
+  );
   const [processing, setProcessing] = useState({
     inProgress: false,
     completed: 0,
@@ -59,93 +108,6 @@ function App() {
     total: 0,
   });
   const [detectionError, setDetectionError] = useState<string | null>(null);
-
-  const fileKey = (file: File) =>
-    `${file.name}|${file.size}|${file.lastModified}`;
-
-  const isJpegFile = (file: File) =>
-    file.type === "image/jpeg" || /\.jpe?g$/i.test(file.name);
-
-  const toPngFilename = (name: string) => {
-    const trimmed = name.trim();
-    if (!trimmed) return "image.png";
-    const base = trimmed.replace(/\.[^.]+$/, "");
-    return `${base}.png`;
-  };
-
-  const toDwPngFilename = (name: string) => {
-    const trimmed = name.trim();
-    if (!trimmed) return "image.dw.png";
-    if (/\.dw\.png$/i.test(trimmed)) return trimmed;
-    const base = trimmed.replace(/\.[^.]+$/, "");
-    return `${base}.dw.png`;
-  };
-
-  const splitFilename = (name: string) => {
-    const trimmed = name.trim();
-    const lower = trimmed.toLowerCase();
-    if (lower.endsWith(".dw.png")) {
-      return { base: trimmed.slice(0, -7), ext: trimmed.slice(-7) };
-    }
-    const lastDot = trimmed.lastIndexOf(".");
-    if (lastDot > 0) {
-      return { base: trimmed.slice(0, lastDot), ext: trimmed.slice(lastDot) };
-    }
-    return { base: trimmed, ext: "" };
-  };
-
-  const ensureUniqueFilenameFromSet = (
-    desiredName: string,
-    used: Set<string>,
-  ) => {
-    const normalized = desiredName.toLowerCase();
-    if (!used.has(normalized)) {
-      used.add(normalized);
-      return desiredName;
-    }
-
-    const { base, ext } = splitFilename(desiredName);
-    const match = base.match(/^(.*)\((\d+)\)$/);
-    let root = base;
-    let counter = 2;
-    if (match) {
-      root = match[1];
-      const parsed = Number(match[2]);
-      if (Number.isFinite(parsed)) {
-        counter = Math.max(2, parsed + 1);
-      }
-    }
-
-    let candidate = `${root}(${counter})${ext}`;
-    while (used.has(candidate.toLowerCase())) {
-      counter += 1;
-      candidate = `${root}(${counter})${ext}`;
-    }
-    used.add(candidate.toLowerCase());
-    return candidate;
-  };
-
-  const ensureUniqueFilename = (
-    desiredName: string,
-    currentIndex: number,
-    files: ImageFile[],
-  ) => {
-    const used = new Set(
-      files
-        .filter((_file, idx) => idx !== currentIndex)
-        .map((file) => file.filename.toLowerCase()),
-    );
-    return ensureUniqueFilenameFromSet(desiredName, used);
-  };
-
-  function loadImage(src: string) {
-    return new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("Failed to load image"));
-      img.src = src;
-    });
-  }
 
   async function resizeImageForUpload(
     file: File,
@@ -178,15 +140,7 @@ function App() {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((result) => {
-          if (!result) {
-            reject(new Error("Failed to resize image"));
-            return;
-          }
-          resolve(result);
-        }, "image/png");
-      });
+      const blob = await canvasToBlob(canvas, "image/png");
       return blob;
     } finally {
       URL.revokeObjectURL(url);
@@ -217,7 +171,10 @@ function App() {
   function removeFile(name: string) {
     setImageFiles((prevFiles) => {
       const toRemove = prevFiles.find((f) => f.filename === name);
-      if (toRemove) URL.revokeObjectURL(toRemove.previewUrl);
+      if (toRemove) {
+        URL.revokeObjectURL(toRemove.previewUrl);
+        if (toRemove.thumbUrl) URL.revokeObjectURL(toRemove.thumbUrl);
+      }
 
       return prevFiles.filter((f) => f.filename !== name);
     });
@@ -260,36 +217,53 @@ function App() {
   }
 
   function clearFiles() {
-    imageFiles.forEach((it) => URL.revokeObjectURL(it.previewUrl));
+    imageFiles.forEach((it) => {
+      URL.revokeObjectURL(it.previewUrl);
+      if (it.thumbUrl) URL.revokeObjectURL(it.thumbUrl);
+    });
     setImageFiles([]);
   }
 
   function resetAll() {
+    processingAbortRef.current?.abort();
     setImageFiles((prevFiles) => {
-      prevFiles.forEach((it) => URL.revokeObjectURL(it.previewUrl));
+      prevFiles.forEach((it) => {
+        URL.revokeObjectURL(it.previewUrl);
+        if (it.thumbUrl) URL.revokeObjectURL(it.thumbUrl);
+      });
       return [];
     });
+    if (uploadSnapshot) {
+      uploadSnapshot.forEach((it) => {
+        URL.revokeObjectURL(it.previewUrl);
+        if (it.thumbUrl) URL.revokeObjectURL(it.thumbUrl);
+      });
+      setUploadSnapshot(null);
+    }
     setStep("upload");
     setReviewIndex(0);
+    setEditConfirmTrigger(0);
+    setResetConfirmTrigger(0);
   }
 
   async function handleDetect() {
     if (detection.inProgress || imageFiles.length === 0) return;
-    setDetection({ inProgress: true, completed: 0, total: imageFiles.length });
+    const toDetect = imageFiles.filter((img) => !img.skipProcessing && img.detections === undefined);
+    if (toDetect.length === 0) return;
+    setDetection({ inProgress: true, completed: 0, total: toDetect.length });
     setDetectionError(null);
     try {
-      const results: ImageFile[] = [];
-      for (const img of imageFiles) {
+      const detectionMap = new Map<string, ImageFile>();
+      for (const img of toDetect) {
         try {
           const dets = await detectFromUrl(img.previewUrl);
-          results.push({ ...img, detections: dets });
+          detectionMap.set(img.filename, { ...img, detections: dets });
         } catch (err) {
           const message = err instanceof Error ? err.message : "Unknown error";
-          if (results.length === 0) {
+          if (detectionMap.size === 0) {
             setDetectionError(message);
             return;
           }
-          results.push(img);
         } finally {
           setDetection((prev) => ({
             ...prev,
@@ -297,7 +271,7 @@ function App() {
           }));
         }
       }
-      setImageFiles(results);
+      setImageFiles((prev) => prev.map((img) => detectionMap.get(img.filename) ?? img));
     } finally {
       setDetection((prev) => ({ ...prev, inProgress: false }));
     }
@@ -322,13 +296,181 @@ function App() {
     }
   }
 
-  function handleToggleDetections(index: number) {
+  async function handleTransformImage(
+    imageIndex: number,
+    transform: ImageTransform,
+  ) {
+    const image = imageFiles[imageIndex];
+    if (!image) return;
+
+    const filename = image.filename;
+    // Ignore extra clicks while this image is already being transformed.
+    if (transformingRef.current.has(filename)) return;
+    transformingRef.current.add(filename);
+    setTransformingFiles((prev) => new Set(prev).add(filename));
+
+    const mimeType = image.file.type || "image/jpeg";
+    const quality = mimeType === "image/jpeg" ? 0.95 : undefined;
+
+    try {
+      let blob: Blob;
+      let width: number;
+      let height: number;
+      try {
+        ({ blob, width, height } = await renderTransformedImage(
+          image.previewUrl,
+          transform,
+          mimeType,
+          quality,
+        ));
+      } catch (err) {
+        console.warn("Failed to transform image.", filename, err);
+        return;
+      }
+
+      const newFile = new File([blob], image.filename, { type: mimeType, lastModified: Date.now() });
+      const newPreviewUrl = URL.createObjectURL(blob);
+      URL.revokeObjectURL(image.previewUrl);
+      if (image.thumbUrl) URL.revokeObjectURL(image.thumbUrl);
+
+      setImageFiles((prev) =>
+        prev.map((f, i) =>
+          i === imageIndex
+            ? {
+                ...f,
+                file: newFile,
+                previewUrl: newPreviewUrl,
+                thumbUrl: undefined,
+                width,
+                height,
+                detections: undefined,
+                selectedDetectionIndex: undefined,
+                excludedDetections: undefined,
+                vector: undefined,
+                check: undefined,
+                status: "new",
+              }
+            : f,
+        ),
+      );
+    } finally {
+      transformingRef.current.delete(filename);
+      setTransformingFiles((prev) => {
+        const next = new Set(prev);
+        next.delete(filename);
+        return next;
+      });
+    }
+  }
+
+  const handleFlipImage = (
+    imageIndex: number,
+    direction: "horizontal" | "vertical",
+  ) => handleTransformImage(imageIndex, { type: "flip", axis: direction });
+
+  const handleRotateImage = (imageIndex: number, direction: "cw" | "ccw") =>
+    handleTransformImage(imageIndex, { type: "rotate", direction });
+
+  function handleToggleSkipProcessing(filename: string) {
+    setImageFiles((prev) =>
+      prev.map((f) =>
+        f.filename === filename ? { ...f, skipProcessing: !f.skipProcessing } : f,
+      ),
+    );
+  }
+
+  function handleToggleDetectionExclusion(imageIndex: number, detIndex: number) {
+    setImageFiles((prevFiles) =>
+      prevFiles.map((file, i) => {
+        if (i !== imageIndex) return file;
+        const excluded = new Set(file.excludedDetections ?? []);
+        if (excluded.has(detIndex)) excluded.delete(detIndex);
+        else excluded.add(detIndex);
+        const allExcluded = (file.detections ?? []).every((_, idx) => excluded.has(idx));
+        return { ...file, excludedDetections: [...excluded], ...(allExcluded ? { showDetections: false } : {}) };
+      }),
+    );
+  }
+
+  async function handleExtractDetections(imageIndex: number) {
+    const image = imageFiles[imageIndex];
+    if (!image?.detections || image.detections.length === 0) return;
+
+    const excluded = new Set(image.excludedDetections ?? []);
+    const toExtract = image.detections
+      .map((det, i) => ({ det, i }))
+      .filter(({ i }) => !excluded.has(i));
+
+    if (toExtract.length === 0) return;
+
+    const baseName = image.filename.replace(/\.[^.]+$/, "");
+    const srcImg = await loadImage(image.previewUrl);
+    const used = new Set(imageFiles.map((f) => f.filename.toLowerCase()));
+    const newFiles: ImageFile[] = [];
+
+    for (let n = 0; n < toExtract.length; n++) {
+      const { det } = toExtract[n];
+      const x1 = Math.max(0, Math.round(det.x1));
+      const y1 = Math.max(0, Math.round(det.y1));
+      const cropW = Math.max(1, Math.round(det.x2) - x1);
+      const cropH = Math.max(1, Math.round(det.y2) - y1);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = cropW;
+      canvas.height = cropH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) continue;
+      ctx.drawImage(srcImg, x1, y1, cropW, cropH, 0, 0, cropW, cropH);
+
+      const blob = await canvasToBlob(canvas, "image/png");
+
+      const desiredName = `${baseName}_wing_${n + 1}.png`;
+      const filename = ensureUniqueFilenameFromSet(desiredName, used);
+      const file = new File([blob], filename, { type: "image/png", lastModified: Date.now() });
+
+      newFiles.push({
+        filename,
+        file,
+        previewUrl: URL.createObjectURL(blob),
+        status: "new",
+        width: cropW,
+        height: cropH,
+      });
+    }
+
+    if (newFiles.length > 0) {
+      setImageFiles((prev) => {
+        const updated = prev.map((f, i) =>
+          i === imageIndex ? { ...f, skipProcessing: true } : f,
+        );
+        return [
+          ...updated.slice(0, imageIndex + 1),
+          ...newFiles,
+          ...updated.slice(imageIndex + 1),
+        ];
+      });
+    }
+  }
+
+  function handleSelectDetection(imageIndex: number, detIndex: number) {
     setImageFiles((prevFiles) =>
       prevFiles.map((file, i) =>
-        i === index
-          ? { ...file, showDetections: !(file.showDetections ?? true) }
-          : file,
+        i === imageIndex ? { ...file, selectedDetectionIndex: detIndex } : file,
       ),
+    );
+  }
+
+  function handleToggleDetections(index: number) {
+    setImageFiles((prevFiles) =>
+      prevFiles.map((file, i) => {
+        if (i !== index) return file;
+        const turningOn = !(file.showDetections ?? true);
+        return {
+          ...file,
+          showDetections: turningOn,
+          ...(turningOn ? { excludedDetections: [] } : {}),
+        };
+      }),
     );
   }
 
@@ -363,11 +505,6 @@ function App() {
     );
   }
 
-  async function loadImageDimensions(src: string) {
-    const img = await loadImage(src);
-    return { width: img.naturalWidth, height: img.naturalHeight };
-  }
-
   async function convertJpegToPng(file: File, targetName: string) {
     const url = URL.createObjectURL(file);
     try {
@@ -378,15 +515,7 @@ function App() {
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Failed to access canvas context");
       ctx.drawImage(img, 0, 0);
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((result) => {
-          if (!result) {
-            reject(new Error("Failed to convert image"));
-            return;
-          }
-          resolve(result);
-        }, "image/png");
-      });
+      const blob = await canvasToBlob(canvas, "image/png");
       return new File([blob], targetName, {
         type: "image/png",
         lastModified: file.lastModified,
@@ -402,7 +531,8 @@ function App() {
       const nextFilename = toPngFilename(image.filename);
       const pngFile = await convertJpegToPng(image.file, nextFilename);
       const nextPreviewUrl = URL.createObjectURL(pngFile);
-      URL.revokeObjectURL(image.previewUrl);
+      // Note: the original previewUrl is intentionally NOT revoked here — it is
+      // kept alive in the upload snapshot so "Edit" can restore the originals.
       return {
         ...image,
         filename: nextFilename,
@@ -419,6 +549,7 @@ function App() {
     image: ImageFile,
     width: number,
     height: number,
+    signal: AbortSignal,
   ) {
     const formData = new FormData();
     const uploadBlob = await resizeImageForUpload(image.file, width, height);
@@ -429,6 +560,7 @@ function App() {
     const response = await fetch("/api/analyze", {
       method: "POST",
       body: formData,
+      signal,
     });
 
     if (!response.ok) {
@@ -468,9 +600,10 @@ function App() {
       return image;
     }
 
-    const topDet = dets.reduce((best, det) =>
-      det.confidence > best.confidence ? det : best,
-    );
+    const topDet =
+      image.selectedDetectionIndex !== undefined && dets[image.selectedDetectionIndex]
+        ? dets[image.selectedDetectionIndex]
+        : dets.reduce((best, det) => det.confidence > best.confidence ? det : best);
 
     const x1 = Math.max(0, Math.round(topDet.x1));
     const y1 = Math.max(0, Math.round(topDet.y1));
@@ -486,12 +619,7 @@ function App() {
       if (!ctx) return image;
       ctx.drawImage(srcImg, x1, y1, cropW, cropH, 0, 0, cropW, cropH);
 
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => {
-          if (!b) reject(new Error("Failed to crop image"));
-          else resolve(b);
-        }, "image/png");
-      });
+      const blob = await canvasToBlob(canvas, "image/png");
 
       const croppedFile = new File([blob], image.filename, {
         type: "image/png",
@@ -517,11 +645,17 @@ function App() {
   ) {
     if (images.length === 0) return [];
 
+    const abortController = new AbortController();
+    processingAbortRef.current = abortController;
+    const { signal } = abortController;
+
     setProcessing({ inProgress: true, completed: 0, total: images.length });
 
     try {
-      const processed = await Promise.all(
-        images.map(async (image): Promise<ImageFile> => {
+      const processed = await mapWithConcurrency(
+        images,
+        PROCESS_CONCURRENCY,
+        async (image): Promise<ImageFile> => {
           let prepared = image;
           let width = image.width;
           let height = image.height;
@@ -560,6 +694,7 @@ function App() {
               prepared,
               width,
               height,
+              signal,
             );
             return {
               ...prepared,
@@ -571,6 +706,7 @@ function App() {
               height,
             };
           } catch (error) {
+            if (signal.aborted) throw error;
             const message =
               error instanceof Error ? error.message : "Unknown error";
             console.error("Backend analysis failed.", image.filename, error);
@@ -582,12 +718,14 @@ function App() {
               height,
             };
           } finally {
-            setProcessing((prev) => ({
-              ...prev,
-              completed: Math.min(prev.total, prev.completed + 1),
-            }));
+            if (!signal.aborted) {
+              setProcessing((prev) => ({
+                ...prev,
+                completed: Math.min(prev.total, prev.completed + 1),
+              }));
+            }
           }
-        }),
+        },
       );
 
       const used = new Set(existing.map((file) => file.filename.toLowerCase()));
@@ -598,82 +736,135 @@ function App() {
           : { ...file, filename: uniqueName };
       });
     } finally {
+      processingAbortRef.current = null;
       setProcessing((prev) => ({ ...prev, inProgress: false }));
     }
   }
 
   async function processImages() {
+    const toProcess = imageFiles.filter((f) => !f.skipProcessing);
+    if (toProcess.length === 0) return;
+
+    // Preserve the full edit-page list (incl. skipped) so "Edit" can restore it.
+    setUploadSnapshot(imageFiles);
+    setImageFiles(toProcess);
     setStep("review");
     setReviewIndex(0);
 
-    const updated = await processImagesWithBackend(imageFiles);
-
-    setImageFiles(updated);
+    try {
+      const processed = await processImagesWithBackend(toProcess);
+      setImageFiles(processed);
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        throw error;
+      }
+    }
   }
 
-  async function addFilesForReview(files: File[]) {
-    if (files.length === 0) return;
-    const existingKeys = new Set(imageFiles.map((f) => fileKey(f.file)));
-    const newFiles: ImageFile[] = [];
+  function handleBackToEdit() {
+    processingAbortRef.current?.abort();
+    const snapshot = uploadSnapshot;
+    if (!snapshot) return;
 
-    for (const file of files) {
-      const key = fileKey(file);
-      if (existingKeys.has(key)) continue;
-      existingKeys.add(key);
-      newFiles.push({
-        filename: file.name,
-        file: file,
-        previewUrl: URL.createObjectURL(file),
-        status: "new",
-      });
+    // Revoke the processed results' object URLs, but keep any that the restored
+    // originals still reference (an un-cropped PNG keeps its original URL).
+    const keep = new Set<string>();
+    for (const file of snapshot) {
+      keep.add(file.previewUrl);
+      if (file.thumbUrl) keep.add(file.thumbUrl);
+    }
+    for (const file of imageFiles) {
+      if (!keep.has(file.previewUrl)) URL.revokeObjectURL(file.previewUrl);
+      if (file.thumbUrl && !keep.has(file.thumbUrl)) {
+        URL.revokeObjectURL(file.thumbUrl);
+      }
     }
 
-    if (newFiles.length === 0) return;
-
-    const processed = await processImagesWithBackend(newFiles, imageFiles);
-
-    setImageFiles((prevFiles) => [...prevFiles, ...processed]);
+    setImageFiles(snapshot);
+    setUploadSnapshot(null);
+    setStep("upload");
+    setReviewIndex(0);
+    setEditConfirmTrigger(0);
+    setResetConfirmTrigger(0);
   }
 
   useEffect(() => {
-    if (imageFiles.length === 0) return;
-    const pending = pendingDimensionsRef.current;
+    // Each previewUrl is considered exactly once. After the first pass every
+    // file is in `requested`, so subsequent renders (e.g. landmark dragging,
+    // which updates imageFiles on every pointer move) short-circuit cheaply
+    // instead of re-scanning and re-querying dimensions.
+    const requested = dimensionsRequestedRef.current;
 
-    imageFiles.forEach((file) => {
-      const hasWidth =
-        typeof file.width === "number" && Number.isFinite(file.width);
-      const hasHeight =
-        typeof file.height === "number" && Number.isFinite(file.height);
-      if (hasWidth && hasHeight) return;
-      if (pending.has(file.previewUrl)) return;
+    for (const file of imageFiles) {
+      if (requested.has(file.previewUrl)) continue;
+      requested.add(file.previewUrl);
 
-      pending.add(file.previewUrl);
-      void loadImageDimensions(file.previewUrl)
+      const hasDimensions =
+        typeof file.width === "number" &&
+        Number.isFinite(file.width) &&
+        typeof file.height === "number" &&
+        Number.isFinite(file.height);
+      if (hasDimensions) continue;
+
+      const { previewUrl, filename } = file;
+      void loadImageDimensions(previewUrl)
         .then(({ width, height }) => {
           setImageFiles((prevFiles) =>
             prevFiles.map((item) =>
-              item.previewUrl === file.previewUrl
+              item.previewUrl === previewUrl
                 ? { ...item, width, height }
                 : item,
             ),
           );
         })
         .catch((error) => {
-          console.warn(
-            "Failed to read image dimensions.",
-            file.filename,
-            error,
-          );
-        })
-        .finally(() => {
-          pending.delete(file.previewUrl);
+          console.warn("Failed to read image dimensions.", filename, error);
         });
-    });
+    }
   }, [imageFiles]);
 
   useEffect(() => {
+    // Generate a small thumbnail once per file (keyed by previewUrl) for the
+    // upload list, so the browser never decodes full-resolution photos to paint
+    // 56px previews. Flip/rotate/extract all produce a new previewUrl, so this
+    // picks them up automatically. Bounded concurrency avoids decoding many
+    // full-size images at once.
+    if (step !== "upload") return;
+    const requested = thumbnailRequestedRef.current;
+    const pending: string[] = [];
+    for (const file of imageFiles) {
+      if (file.thumbUrl || requested.has(file.previewUrl)) continue;
+      requested.add(file.previewUrl);
+      pending.push(file.previewUrl);
+    }
+    if (pending.length === 0) return;
+
+    void mapWithConcurrency(pending, THUMBNAIL_CONCURRENCY, async (previewUrl) => {
+      try {
+        const blob = await renderThumbnail(previewUrl, THUMBNAIL_MAX_EDGE);
+        const thumbUrl = URL.createObjectURL(blob);
+        setImageFiles((prevFiles) => {
+          if (!prevFiles.some((f) => f.previewUrl === previewUrl)) {
+            // File was removed or replaced while the thumbnail was rendering.
+            URL.revokeObjectURL(thumbUrl);
+            return prevFiles;
+          }
+          return prevFiles.map((f) =>
+            f.previewUrl === previewUrl ? { ...f, thumbUrl } : f,
+          );
+        });
+      } catch (error) {
+        console.warn("Failed to generate thumbnail.", error);
+      }
+    });
+  }, [imageFiles, step]);
+
+  useEffect(() => {
     return () => {
-      imageFiles.forEach((it) => URL.revokeObjectURL(it.previewUrl));
+      imageFiles.forEach((it) => {
+        URL.revokeObjectURL(it.previewUrl);
+        if (it.thumbUrl) URL.revokeObjectURL(it.thumbUrl);
+      });
     };
   }, []);
 
@@ -684,6 +875,33 @@ function App() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (step === "review") {
+      history.pushState({ wingaiStep: "review" }, "");
+    }
+  }, [step]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (step !== "review") return;
+      // Re-push so the back button still works if the user cancels the dialog.
+      history.pushState({ wingaiStep: "review" }, "");
+      setEditConfirmTrigger((n) => n + 1);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [step]);
+
+  useEffect(() => {
+    if (imageFiles.length === 0 && step !== "review") return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [imageFiles.length, step]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -734,8 +952,14 @@ function App() {
           <button
             type="button"
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center" }}
-            onClick={resetAll}
-            aria-label="WingAI Home"
+            onClick={
+              step === "review"
+                ? () => setResetConfirmTrigger((n) => n + 1)
+                : imageFiles.length > 0
+                  ? () => setIsUploadResetConfirmOpen(true)
+                  : resetAll
+            }
+            aria-label={t.homeLabel}
           >
             <img
               src={theme === "dark" ? "/logo-dark.png" : "/logo.png"}
@@ -749,13 +973,14 @@ function App() {
               role="status"
               style={{ justifySelf: "center" }}
             >
-              Download in progress...
+              {t.downloadInProgress}
             </div>
           )}
           <div
             className="d-flex align-items-center gap-3"
             style={{ justifySelf: "end" }}
           >
+            <LanguageSwitcher />
             <HelpPanel />
             <DetectionModelPanel />
             <div className="form-check form-switch m-0">
@@ -768,10 +993,10 @@ function App() {
                 onChange={() =>
                   setTheme((prev) => (prev === "dark" ? "light" : "dark"))
                 }
-                aria-label="Toggle dark mode"
+                aria-label={t.darkMode}
               />
               <label className="form-check-label small" htmlFor="theme-switch">
-                Dark mode
+                {t.darkMode}
               </label>
             </div>
           </div>
@@ -780,8 +1005,8 @@ function App() {
           <div className="mb-3">
             <div className="small text-muted mb-1">
               {detection.total === 1
-                ? "Detecting objects..."
-                : `Detecting objects... ${detection.completed}/${detection.total}`}
+                ? t.detectingObjects
+                : t.detectingObjectsProgress(detection.completed, detection.total)}
             </div>
             <div
               className="progress"
@@ -811,7 +1036,7 @@ function App() {
         {processing.inProgress && processing.total > 0 && (
           <div className="mb-3">
             <div className="small text-muted mb-1">
-              Processing images... {processing.completed}/{processing.total}
+              {t.processingImages(processing.completed, processing.total)}
             </div>
             <div
               className="progress"
@@ -847,6 +1072,13 @@ function App() {
             detectionError={detectionError}
             onToggleDetections={handleToggleDetections}
             onDetectSingle={handleDetectSingle}
+            onSelectDetection={handleSelectDetection}
+            onFlipImage={handleFlipImage}
+            onRotateImage={handleRotateImage}
+            onToggleSkipProcessing={handleToggleSkipProcessing}
+            onToggleDetectionExclusion={handleToggleDetectionExclusion}
+            onExtractDetections={handleExtractDetections}
+            transformingFiles={transformingFiles}
           />
         )}
         {step === "review" && (
@@ -858,16 +1090,32 @@ function App() {
             onUpdatePoint={updatePoint}
             onRename={renameFile}
             onRemove={removeFile}
-            onAddFiles={addFilesForReview}
+            onBackToEdit={handleBackToEdit}
             onReset={resetAll}
             onClearCheck={clearCheckForIndex}
             onDownloadNotice={triggerDownloadNotice}
+            editConfirmTrigger={editConfirmTrigger}
+            resetConfirmTrigger={resetConfirmTrigger}
           />
         )}
         <footer className="mt-4 text-center text-muted small">
           © {new Date().getFullYear()} Mateusz Krajewski
         </footer>
       </div>
+      {isUploadResetConfirmOpen && (
+        <ConfirmDialog
+          title={t.resetTitle}
+          message={t.resetMessage}
+          confirmLabel={t.reset}
+          cancelLabel={t.cancel}
+          closeLabel={t.close}
+          onConfirm={() => {
+            setIsUploadResetConfirmOpen(false);
+            resetAll();
+          }}
+          onCancel={() => setIsUploadResetConfirmOpen(false)}
+        />
+      )}
     </>
   );
 }

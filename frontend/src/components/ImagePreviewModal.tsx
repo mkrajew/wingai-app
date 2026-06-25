@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { formatBytes } from "../utils";
 import type { ImageFile, Detection } from "../App";
+import { useT } from "../i18n";
+
+const CHECKBOX_SIZE = 14;
 
 export type ImagePreviewModalProps = {
   images: ImageFile[];
@@ -12,7 +15,14 @@ export type ImagePreviewModalProps = {
   onRename: (index: number, newName: string) => void;
   onToggleDetections: (index: number) => void;
   onDetectSingle: (index: number) => void;
+  onSelectDetection: (imageIndex: number, detIndex: number) => void;
+  onToggleDetectionExclusion: (imageIndex: number, detIndex: number) => void;
+  onExtractDetections: (imageIndex: number) => void;
+  onFlipImage: (imageIndex: number, direction: "horizontal" | "vertical") => void;
+  onRotateImage: (imageIndex: number, direction: "cw" | "ccw") => void;
+  onToggleSkipProcessing: (filename: string) => void;
   isDetecting: boolean;
+  transformingFiles: Set<string>;
 };
 
 export default function ImagePreviewModal({
@@ -24,22 +34,41 @@ export default function ImagePreviewModal({
   onRename,
   onToggleDetections,
   onDetectSingle,
+  onSelectDetection,
+  onToggleDetectionExclusion,
+  onExtractDetections,
+  onFlipImage,
+  onRotateImage,
+  onToggleSkipProcessing,
   isDetecting,
+  transformingFiles,
 }: ImagePreviewModalProps) {
+  const t = useT();
   const previewImage =
     previewIndex === null ? null : images[previewIndex] ?? null;
+  const isTransforming = previewImage
+    ? transformingFiles.has(previewImage.filename)
+    : false;
   const [previewDimensions, setPreviewDimensions] = useState<{
     width: number;
     height: number;
   } | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [hoveredDetIndex, setHoveredDetIndex] = useState<number | null>(null);
+  const [showConfidence, setShowConfidence] = useState(true);
   const showBoxes = previewImage?.showDetections ?? true;
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const drawBoxes = useCallback(
-    (detections: Detection[] | undefined) => {
+    (
+      detections: Detection[] | undefined,
+      hoveredIndex: number | null = null,
+      selectedIndex: number | null = null,
+      showConf = true,
+      excluded: ReadonlySet<number> = new Set(),
+    ) => {
       const img = imgRef.current;
       const canvas = canvasRef.current;
       if (!img || !canvas || !detections || detections.length === 0) return;
@@ -58,26 +87,82 @@ export default function ImagePreviewModal({
 
       ctx.clearRect(0, 0, dispW, dispH);
 
-      const topDetection = detections.reduce((best, det) =>
-        det.confidence > best.confidence ? det : best,
+      const includedIndices = detections.map((_, i) => i).filter(i => !excluded.has(i));
+      if (includedIndices.length === 0) return;
+
+      const topIndex = includedIndices.reduce((best, i) =>
+        detections[i].confidence > detections[best].confidence ? i : best,
+        includedIndices[0],
       );
-      for (const det of [topDetection]) {
+      const mainIndex = selectedIndex !== null && !excluded.has(selectedIndex) ? selectedIndex : topIndex;
+
+      ctx.font = "bold 12px sans-serif";
+      ctx.textBaseline = "bottom";
+
+      for (let i = 0; i < detections.length; i++) {
+        const det = detections[i];
         const x = det.x1 * scaleX;
         const y = det.y1 * scaleY;
         const w = (det.x2 - det.x1) * scaleX;
         const h = (det.y2 - det.y1) * scaleY;
+        const isExcluded = excluded.has(i);
+        const color = isExcluded ? "#aaaaaa" : (i === mainIndex ? "#00e676" : "#2196f3");
+        const isHovered = i === hoveredIndex;
 
-        ctx.strokeStyle = "#00e676";
-        ctx.lineWidth = 2;
+        if (isHovered && !isExcluded) {
+          ctx.fillStyle = color + "33";
+          ctx.fillRect(x, y, w, h);
+        }
+
+        ctx.globalAlpha = isExcluded ? 0.8 : 1.0;
+        ctx.setLineDash(isExcluded ? [5, 4] : []);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = isHovered && !isExcluded ? 3 : 2;
         ctx.strokeRect(x, y, w, h);
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1.0;
+
+        const anchorY = y > CHECKBOX_SIZE ? y : y + h + CHECKBOX_SIZE;
+        const cbX = x;
+        const cbY = anchorY - CHECKBOX_SIZE;
+
+        if (showConf && !isExcluded) {
+          const label = (det.confidence * 100).toFixed(1) + "%";
+          const textW = ctx.measureText(label).width;
+          ctx.fillStyle = color;
+          ctx.fillRect(cbX + CHECKBOX_SIZE, cbY, textW + 6, CHECKBOX_SIZE);
+          ctx.fillStyle = "#000";
+          ctx.fillText(label, cbX + CHECKBOX_SIZE + 3, anchorY);
+        }
+
+        ctx.fillStyle = isExcluded ? "rgba(140,140,140,0.95)" : color;
+        ctx.fillRect(cbX, cbY, CHECKBOX_SIZE, CHECKBOX_SIZE);
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (isExcluded) {
+          ctx.moveTo(cbX + 3, cbY + 3);
+          ctx.lineTo(cbX + CHECKBOX_SIZE - 3, cbY + CHECKBOX_SIZE - 3);
+          ctx.moveTo(cbX + CHECKBOX_SIZE - 3, cbY + 3);
+          ctx.lineTo(cbX + 3, cbY + CHECKBOX_SIZE - 3);
+        } else {
+          ctx.moveTo(cbX + 2, cbY + CHECKBOX_SIZE / 2);
+          ctx.lineTo(cbX + CHECKBOX_SIZE / 2 - 1, cbY + CHECKBOX_SIZE - 3);
+          ctx.lineTo(cbX + CHECKBOX_SIZE - 2, cbY + 2);
+        }
+        ctx.stroke();
       }
     },
     [],
   );
 
   useEffect(() => {
-    if (showBoxes) drawBoxes(previewImage?.detections);
-  }, [drawBoxes, previewImage, showBoxes]);
+    if (showBoxes) drawBoxes(previewImage?.detections, hoveredDetIndex, previewImage?.selectedDetectionIndex ?? null, showConfidence, new Set(previewImage?.excludedDetections ?? []));
+  }, [drawBoxes, previewImage, showBoxes, hoveredDetIndex, showConfidence]);
+
+  useEffect(() => {
+    setHoveredDetIndex(null);
+  }, [previewImage?.previewUrl]);
 
   useEffect(() => {
     if (!previewImage) return;
@@ -140,6 +225,29 @@ export default function ImagePreviewModal({
         return;
       }
 
+      if (!isEditingName && (event.key === "h" || event.key === "H")) {
+        if (previewIndex !== null) onFlipImage(previewIndex, "horizontal");
+        return;
+      }
+
+      if (!isEditingName && (event.key === "v" || event.key === "V")) {
+        if (previewIndex !== null) onFlipImage(previewIndex, "vertical");
+        return;
+      }
+
+      if (!isEditingName && event.key === "Tab") {
+        const detections = previewImage.detections;
+        if (detections && detections.length > 0 && (previewImage.showDetections ?? true) && previewIndex !== null) {
+          event.preventDefault();
+          const current = previewImage.selectedDetectionIndex ?? 0;
+          const next = event.shiftKey
+            ? (current - 1 + detections.length) % detections.length
+            : (current + 1) % detections.length;
+          onSelectDetection(previewIndex, next);
+        }
+        return;
+      }
+
       if (event.key === "Escape") {
         onClose();
       } else if (event.key === "Delete") {
@@ -168,8 +276,10 @@ export default function ImagePreviewModal({
   }, [
     images.length,
     onClose,
+    onFlipImage,
     onPreviewIndexChange,
     onRemove,
+    onSelectDetection,
     onToggleDetections,
     previewImage,
     previewIndex,
@@ -194,7 +304,7 @@ export default function ImagePreviewModal({
     >
       <div
         role="dialog"
-        aria-label="Podglad obrazu"
+        aria-label={t.imagePreviewLabel}
         onClick={(event) => event.stopPropagation()}
         style={{
           position: "relative",
@@ -212,7 +322,7 @@ export default function ImagePreviewModal({
       >
         <button
           type="button"
-          aria-label="Zamknij"
+          aria-label={t.close}
           onClick={onClose}
           className="btn btn-close"
           style={{ position: "absolute", top: "0.5rem", right: "0.5rem" }}
@@ -220,7 +330,7 @@ export default function ImagePreviewModal({
         <div className="text-center text-muted">
           {previewIndex === null
             ? ""
-            : `Image ${previewIndex + 1} of ${images.length}`}
+            : t.imagePreviewOf(previewIndex + 1, images.length)}
         </div>
         <div
           style={{
@@ -236,26 +346,106 @@ export default function ImagePreviewModal({
               ref={imgRef}
               src={previewImage.previewUrl}
               alt={previewImage.filename}
-              onLoad={() => { if (showBoxes) drawBoxes(previewImage.detections); }}
+              onLoad={() => { if (showBoxes) drawBoxes(previewImage.detections, null, previewImage.selectedDetectionIndex ?? null, showConfidence, new Set(previewImage.excludedDetections ?? [])); }}
               style={{
                 display: "block",
                 maxWidth: "100%",
-                maxHeight: "100%",
+                maxHeight: "calc(80vh - 14rem)",
                 objectFit: "contain",
               }}
             />
             {showBoxes && previewImage.detections && previewImage.detections.length > 0 && (
               <canvas
                 ref={canvasRef}
+                onMouseMove={(event) => {
+                  const detections = previewImage.detections;
+                  if (!detections || !imgRef.current) return;
+                  const canvas = event.currentTarget;
+                  const rect = canvas.getBoundingClientRect();
+                  const mouseX = (event.clientX - rect.left) * (canvas.width / rect.width);
+                  const mouseY = (event.clientY - rect.top) * (canvas.height / rect.height);
+                  const scaleX = canvas.width / imgRef.current.naturalWidth;
+                  const scaleY = canvas.height / imgRef.current.naturalHeight;
+                  let found = -1;
+                  let foundDist = Infinity;
+                  for (let i = 0; i < detections.length; i++) {
+                    const det = detections[i];
+                    const cx = ((det.x1 + det.x2) / 2) * scaleX;
+                    const cy = ((det.y1 + det.y2) / 2) * scaleY;
+                    const dist = (mouseX - cx) ** 2 + (mouseY - cy) ** 2;
+                    if (dist < foundDist) {
+                      found = i;
+                      foundDist = dist;
+                    }
+                  }
+                  const newHovered = found === -1 ? null : found;
+                  if (newHovered !== hoveredDetIndex) setHoveredDetIndex(newHovered);
+                }}
+                onClick={(event) => {
+                  const detections = previewImage.detections;
+                  if (!detections || !imgRef.current || previewIndex === null) return;
+                  const canvas = event.currentTarget;
+                  const rect = canvas.getBoundingClientRect();
+                  const mouseX = (event.clientX - rect.left) * (canvas.width / rect.width);
+                  const mouseY = (event.clientY - rect.top) * (canvas.height / rect.height);
+                  const scaleX = canvas.width / imgRef.current.naturalWidth;
+                  const scaleY = canvas.height / imgRef.current.naturalHeight;
+
+                  // Check checkbox clicks first
+                  for (let i = 0; i < detections.length; i++) {
+                    const det = detections[i];
+                    const x = det.x1 * scaleX;
+                    const y = det.y1 * scaleY;
+                    const h = (det.y2 - det.y1) * scaleY;
+                    const anchorY = y > CHECKBOX_SIZE ? y : y + h + CHECKBOX_SIZE;
+                    const cbX = x;
+                    const cbY = anchorY - CHECKBOX_SIZE;
+                    if (mouseX >= cbX && mouseX <= cbX + CHECKBOX_SIZE && mouseY >= cbY && mouseY <= cbY + CHECKBOX_SIZE) {
+                      onToggleDetectionExclusion(previewIndex, i);
+                      return;
+                    }
+                  }
+
+                  // Otherwise select main by closest center
+                  let found = -1;
+                  let foundDist = Infinity;
+                  for (let i = 0; i < detections.length; i++) {
+                    const det = detections[i];
+                    const cx = ((det.x1 + det.x2) / 2) * scaleX;
+                    const cy = ((det.y1 + det.y2) / 2) * scaleY;
+                    const dist = (mouseX - cx) ** 2 + (mouseY - cy) ** 2;
+                    if (dist < foundDist) { found = i; foundDist = dist; }
+                  }
+                  if (found !== -1) onSelectDetection(previewIndex, found);
+                }}
+                onMouseLeave={() => setHoveredDetIndex(null)}
                 style={{
                   position: "absolute",
                   top: 0,
                   left: 0,
                   width: "100%",
                   height: "100%",
-                  pointerEvents: "none",
+                  cursor: hoveredDetIndex !== null ? "pointer" : "default",
                 }}
               />
+            )}
+            {isTransforming && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "rgba(0, 0, 0, 0.25)",
+                }}
+              >
+                <span
+                  className="spinner-border text-light"
+                  role="status"
+                  aria-hidden="true"
+                />
+              </div>
             )}
           </div>
         </div>
@@ -271,19 +461,64 @@ export default function ImagePreviewModal({
             onRename(previewIndex, renameValue.trim());
             event.currentTarget.blur();
           }}
+          onBlur={() => {
+            if (!renameValue.trim() || previewIndex === null) return;
+            onRename(previewIndex, renameValue.trim());
+          }}
         />
         <div className="text-center text-muted">
           {formatBytes(previewImage.file.size)}
           {" • "}
           {previewDimensions
-            ? `${previewDimensions.width}×${previewDimensions.height}px`
-            : "Wymiary: ..."}
+            ? t.dimensionsPx(previewDimensions.width, previewDimensions.height)
+            : t.dimensionsLoading}
           {" • "}
           {previewImage.file.type
             ? previewImage.file.type.replace(/^image\//, "")
-            : "unknown type"}
+            : t.unknownType}
         </div>
-        <div className="d-flex justify-content-end">
+        <div className="d-flex justify-content-between align-items-center">
+          <div className="d-flex gap-2">
+            <button
+              type="button"
+              className={`btn btn-sm ${previewImage.skipProcessing ? "btn-outline-secondary" : "btn-outline-success"}`}
+              onClick={() => onToggleSkipProcessing(previewImage.filename)}
+            >
+              {previewImage.skipProcessing ? t.skipProcessing : t.processImage}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              title={t.flipHorizontal}
+              onClick={() => { if (previewIndex !== null) onFlipImage(previewIndex, "horizontal"); }}
+            >
+              {t.flipHorizontal}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              title={t.flipVertical}
+              onClick={() => { if (previewIndex !== null) onFlipImage(previewIndex, "vertical"); }}
+            >
+              {t.flipVertical}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              title={t.rotateCcw}
+              onClick={() => { if (previewIndex !== null) onRotateImage(previewIndex, "ccw"); }}
+            >
+              {t.rotateCcw}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              title={t.rotateCw}
+              onClick={() => { if (previewIndex !== null) onRotateImage(previewIndex, "cw"); }}
+            >
+              {t.rotateCw}
+            </button>
+          </div>
           <button
             type="button"
             className="btn btn-outline-danger"
@@ -301,7 +536,7 @@ export default function ImagePreviewModal({
               }
             }}
           >
-            Delete
+            {t.delete}
           </button>
         </div>
         <div className="d-flex justify-content-between align-items-center gap-2">
@@ -315,7 +550,7 @@ export default function ImagePreviewModal({
                 : onPreviewIndexChange(Math.max(0, previewIndex - 1))
             }
           >
-            Previous
+            {t.previous}
           </button>
           {previewImage.detections === undefined ? (
             <button
@@ -333,21 +568,41 @@ export default function ImagePreviewModal({
                   aria-hidden="true"
                 />
               )}
-              Detect
+              {t.detect}
             </button>
           ) : previewImage.detections.length > 0 ? (
-            <button
-              type="button"
-              className={`btn btn-sm d-flex align-items-center gap-2 ${
-                showBoxes ? "btn-success" : "btn-outline-secondary"
-              }`}
-              onClick={() => {
-                if (previewIndex !== null) onToggleDetections(previewIndex);
-              }}
-            >
-              <Check size={14} />
-              {showBoxes ? "Bounding box on" : "Bounding box off"}
-            </button>
+            <div className="d-flex align-items-center gap-2">
+              <button
+                type="button"
+                className={`btn btn-sm d-flex align-items-center gap-2 ${
+                  showBoxes ? "btn-success" : "btn-outline-secondary"
+                }`}
+                onClick={() => {
+                  if (previewIndex !== null) onToggleDetections(previewIndex);
+                }}
+              >
+                <Check size={14} />
+                {showBoxes ? t.boundingBoxesOn : t.boundingBoxesOff}
+              </button>
+              {showBoxes && (
+                <button
+                  type="button"
+                  className={`btn btn-sm ${showConfidence ? "btn-success" : "btn-outline-secondary"}`}
+                  onClick={() => setShowConfidence((prev) => !prev)}
+                >
+                  {showConfidence ? t.confidenceOn : t.confidenceOff}
+                </button>
+              )}
+              {showBoxes && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-primary"
+                  onClick={() => { if (previewIndex !== null) onExtractDetections(previewIndex); }}
+                >
+                  {t.extractWings}
+                </button>
+              )}
+            </div>
           ) : (
             <div />
           )}
@@ -363,7 +618,7 @@ export default function ImagePreviewModal({
                   )
             }
           >
-            Next
+            {t.next}
           </button>
         </div>
       </div>

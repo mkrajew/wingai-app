@@ -3,6 +3,8 @@ import type { ImageFile } from "../App";
 import { useDropzone } from "react-dropzone";
 import { formatBytes } from "../utils";
 import ImagePreviewModal from "./ImagePreviewModal";
+import ConfirmDialog from "./ConfirmDialog";
+import { useT } from "../i18n";
 
 export default UploadImages;
 
@@ -18,6 +20,13 @@ type UploadImagesProps = {
   detectionError: string | null;
   onToggleDetections: (index: number) => void;
   onDetectSingle: (index: number) => void;
+  onFlipImage: (imageIndex: number, direction: "horizontal" | "vertical") => void;
+  onRotateImage: (imageIndex: number, direction: "cw" | "ccw") => void;
+  onToggleSkipProcessing: (filename: string) => void;
+  onSelectDetection: (imageIndex: number, detIndex: number) => void;
+  onToggleDetectionExclusion: (imageIndex: number, detIndex: number) => void;
+  onExtractDetections: (imageIndex: number) => void;
+  transformingFiles: Set<string>;
 };
 function UploadImages({
   images,
@@ -31,6 +40,13 @@ function UploadImages({
   detectionError,
   onToggleDetections,
   onDetectSingle,
+  onFlipImage,
+  onRotateImage,
+  onToggleSkipProcessing,
+  onSelectDetection,
+  onToggleDetectionExclusion,
+  onExtractDetections,
+  transformingFiles,
 }: UploadImagesProps) {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [filterText, setFilterText] = useState("");
@@ -65,6 +81,7 @@ function UploadImages({
         onDetect={onDetect}
         isDetecting={isDetecting}
         detectionError={detectionError}
+        onToggleSkipProcessing={onToggleSkipProcessing}
         onSelectImage={(_image, originalIndex) => {
           setPreviewIndex(originalIndex);
         }}
@@ -86,7 +103,14 @@ function UploadImages({
         onRename={renameFile}
         onToggleDetections={onToggleDetections}
         onDetectSingle={onDetectSingle}
+        onSelectDetection={onSelectDetection}
+        onToggleDetectionExclusion={onToggleDetectionExclusion}
+        onExtractDetections={onExtractDetections}
+        onFlipImage={onFlipImage}
+        onRotateImage={onRotateImage}
+        onToggleSkipProcessing={onToggleSkipProcessing}
         isDetecting={isDetecting}
+        transformingFiles={transformingFiles}
       />
     </>
   );
@@ -96,6 +120,7 @@ type DropZoneAreaProps = {
   addFiles: (accepted: File[]) => void;
 };
 function DropZoneArea({ addFiles }: DropZoneAreaProps) {
+  const t = useT();
   const [isHovering, setIsHovering] = useState(false);
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -132,11 +157,9 @@ function DropZoneArea({ addFiles }: DropZoneAreaProps) {
     >
       <input {...getInputProps()} />
       <div className="fw-semibold ">
-        {isDragActive
-          ? "Drop files here..."
-          : "Drag photos here or click to select"}
+        {isDragActive ? t.dropFilesHere : t.dragPhotosHere}
       </div>
-      <div className="text-muted mt-1">Supported formats: .png, .jpg</div>
+      <div className="text-muted mt-1">{t.supportedFormats}</div>
     </div>
   );
 }
@@ -152,6 +175,7 @@ type ImageListProps = {
   onDetect: () => void;
   isDetecting: boolean;
   detectionError: string | null;
+  onToggleSkipProcessing: (filename: string) => void;
   onSelectImage: (image: ImageFile, index: number) => void;
   onPreviewFirst: () => void;
 };
@@ -166,15 +190,18 @@ function ImageList({
   onDetect,
   isDetecting,
   detectionError,
+  onToggleSkipProcessing,
   onSelectImage,
   onPreviewFirst,
 }: ImageListProps) {
+  const t = useT();
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   if (totalCount === 0) return null;
   return (
     <div className="d-flex flex-column mt-3">
       <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-3 mb-3">
         <h3 className="mb-0">
-          Uploaded {totalCount} {totalCount === 1 ? "image" : "images"}:
+          {t.uploadedImages(totalCount)}
         </h3>
         <div className="flex-grow-1">
           <div className="d-flex align-items-center gap-2">
@@ -182,7 +209,7 @@ function ImageList({
               id="upload-filter"
               type="text"
               className="form-control"
-              placeholder="Type to filter..."
+              placeholder={t.typeToFilter}
               value={filterText}
               onChange={(event) => onFilterChange(event.target.value)}
             />
@@ -190,21 +217,21 @@ function ImageList({
         </div>
         <div className="d-flex align-items-center gap-2">
           <button type="button" className="btn btn-primary" onClick={onProcess}>
-            Process
+            {t.process}
           </button>
           <button
             type="button"
             className="btn btn-outline-secondary"
             onClick={onPreviewFirst}
           >
-            Preview
+            {t.preview}
           </button>
           <button
             type="button"
             className="btn btn-outline-secondary"
-            onClick={clearFiles}
+            onClick={() => setIsClearConfirmOpen(true)}
           >
-            Clear
+            {t.clear}
           </button>
           <button
             type="button"
@@ -219,13 +246,13 @@ function ImageList({
                 aria-hidden="true"
               />
             )}
-            Detect
+            {t.detect}
           </button>
         </div>
       </div>
       {detectionError && (
         <div className="alert alert-danger py-2 px-3 mb-2 small" role="alert">
-          Detection failed: {detectionError}
+          {t.detectionFailed(detectionError ?? "")}
         </div>
       )}
       <ul
@@ -238,7 +265,7 @@ function ImageList({
       >
         {entries.length === 0 ? (
           <li className="list-group-item text-center text-muted">
-            No files match the current filter.
+            {t.noFilesMatch}
           </li>
         ) : (
           entries.map(({ image, index }) => (
@@ -246,11 +273,26 @@ function ImageList({
               key={`${image.filename}-${index}`}
               image={image}
               onRemove={removeFile}
+              onToggleSkipProcessing={() => onToggleSkipProcessing(image.filename)}
               onSelect={() => onSelectImage(image, index)}
             />
           ))
         )}
       </ul>
+      {isClearConfirmOpen && (
+        <ConfirmDialog
+          title={t.clearTitle}
+          message={t.clearMessage}
+          confirmLabel={t.clear}
+          cancelLabel={t.cancel}
+          closeLabel={t.close}
+          onConfirm={() => {
+            setIsClearConfirmOpen(false);
+            clearFiles();
+          }}
+          onCancel={() => setIsClearConfirmOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -258,12 +300,14 @@ function ImageList({
 type ImageListItemProps = {
   image: ImageFile;
   onRemove: (filename: string) => void;
+  onToggleSkipProcessing: () => void;
   onSelect: () => void;
 };
-function ImageListItem({ image, onRemove, onSelect }: ImageListItemProps) {
+function ImageListItem({ image, onRemove, onToggleSkipProcessing, onSelect }: ImageListItemProps) {
+  const t = useT();
   const width = image.width;
   const height = image.height;
-  let dimensionLabel = "dimensions...";
+  let dimensionLabel = t.dimensionsLoading;
 
   if (
     typeof width === "number" &&
@@ -288,14 +332,22 @@ function ImageListItem({ image, onRemove, onSelect }: ImageListItemProps) {
       style={{ cursor: "pointer" }}
     >
       <div className="position-relative" style={{ flexShrink: 0 }}>
-        <img
-          src={image.previewUrl}
-          alt={image.filename}
-          width={56}
-          height={56}
-          style={{ objectFit: "cover", display: "block" }}
-          className="rounded border"
-        />
+        {image.thumbUrl ? (
+          <img
+            src={image.thumbUrl}
+            alt={image.filename}
+            width={56}
+            height={56}
+            style={{ objectFit: "cover", display: "block" }}
+            className="rounded border"
+          />
+        ) : (
+          <div
+            className="rounded border"
+            style={{ width: 56, height: 56, background: "var(--bs-secondary-bg)" }}
+            aria-hidden="true"
+          />
+        )}
         {image.detections !== undefined && (
           <span
             className={`badge position-absolute bottom-0 end-0 ${
@@ -315,6 +367,18 @@ function ImageListItem({ image, onRemove, onSelect }: ImageListItemProps) {
           {formatBytes(image.file.size)} • {dimensionLabel}
         </div>
       </div>
+      <button
+        type="button"
+        className={`btn btn-sm py-0 px-1 ${image.skipProcessing ? "btn-outline-secondary" : "btn-outline-success"}`}
+        style={{ fontSize: "0.65rem", whiteSpace: "nowrap" }}
+        title={image.skipProcessing ? "Excluded from processing — click to include" : "Included in processing — click to exclude"}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleSkipProcessing();
+        }}
+      >
+        {image.skipProcessing ? t.skipProcessing : t.processImage}
+      </button>
       <button
         type="button"
         className="btn btn-close"
