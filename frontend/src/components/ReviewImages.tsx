@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { addPngTextChunk, createZipBlob } from "../utils";
 import type { ImageFile } from "../App";
 import { useT } from "../i18n";
+import {
+  buildLandmarksMetadata,
+  csvCoordinates,
+  fromSvg,
+  toSvg,
+} from "../utils/landmarks";
 import ConfirmDialog from "./ConfirmDialog";
 
 type ReviewImagesProps = {
@@ -88,6 +94,12 @@ export default function ReviewImages({
     }
     return result;
   }, [image]);
+
+  // Where each landmark is drawn: the centre of its pixel.
+  const svgPoints = useMemo(
+    () => points.map((point) => ({ x: toSvg(point.x), y: toSvg(point.y) })),
+    [points],
+  );
 
   const checkIndices = useMemo(() => {
     return images.reduce<number[]>((acc, item, idx) => {
@@ -304,19 +316,6 @@ export default function ReviewImages({
     downloadBlob(filename, new Blob([content], { type }));
   };
 
-  const buildLandmarksMetadata = (img: ImageFile) => {
-    const vector = img.vector ?? [];
-    const values: number[] = [];
-    for (let i = 0; i < vector.length; i += 2) {
-      const rawX = vector[i];
-      const rawY = vector[i + 1];
-      const x = Number.isFinite(rawX) ? Math.trunc(rawX) : 0;
-      const y = Number.isFinite(rawY) ? Math.trunc(rawY) : 0;
-      values.push(x, y);
-    }
-    return `landmarks:${values.join(" ")};`;
-  };
-
   const buildCsv = () => {
     const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
     const interleavedHeaders = ["file"];
@@ -325,24 +324,11 @@ export default function ReviewImages({
     }
     const rows: string[] = [interleavedHeaders.map(csvEscape).join(",")];
     images.forEach((img) => {
-      const vector = img.vector ?? [];
       const ySize =
         typeof img.height === "number" && Number.isFinite(img.height)
           ? img.height
           : null;
-      const values: string[] = [img.filename];
-      for (let i = 0; i < 19; i += 1) {
-        const x = vector[i * 2];
-        const y = vector[i * 2 + 1];
-        values.push(Number.isFinite(x) ? Math.trunc(x).toString() : "");
-        if (!Number.isFinite(y)) {
-          values.push("");
-          continue;
-        }
-        const intY = Math.trunc(y);
-        const flippedY = ySize !== null && ySize > 0 ? ySize - intY - 2 : intY;
-        values.push(flippedY.toString());
-      }
+      const values = [img.filename, ...csvCoordinates(img.vector ?? [], ySize)];
       rows.push(values.map((value) => csvEscape(value)).join(","));
     });
     return rows.join("\n");
@@ -363,7 +349,7 @@ export default function ReviewImages({
             data: addPngTextChunk(
               new Uint8Array(await img.file.arrayBuffer()),
               "IdentiFly",
-              buildLandmarksMetadata(img),
+              buildLandmarksMetadata(img.vector ?? []),
             ),
             lastModified: img.file.lastModified,
           })),
@@ -492,7 +478,7 @@ export default function ReviewImages({
                   if (dragIndex !== null) {
                     const pos = toSvgPoint(event);
                     if (!pos) return;
-                    onUpdatePoint(index, dragIndex, pos.x, pos.y);
+                    onUpdatePoint(index, dragIndex, fromSvg(pos.x), fromSvg(pos.y));
                     return;
                   }
                   if (!isPanning) return;
@@ -541,7 +527,7 @@ export default function ReviewImages({
                   preserveAspectRatio="xMidYMid meet"
                 />
                 {hasVector &&
-                  points.map((point, idx) => (
+                  svgPoints.map((point, idx) => (
                     <g key={`pt-${idx}`}>
                       <circle
                         cx={point.x}
@@ -560,7 +546,7 @@ export default function ReviewImages({
                           setDragIndex(idx);
                           const pos = toSvgPoint(event);
                           if (!pos) return;
-                          onUpdatePoint(index, idx, pos.x, pos.y);
+                          onUpdatePoint(index, idx, fromSvg(pos.x), fromSvg(pos.y));
                         }}
                         style={{ cursor: "grab" }}
                       />

@@ -31,6 +31,7 @@ import {
   chooseOrientation,
 } from "./utils/wingOptions";
 import type { WingModel } from "./utils/wingOptions";
+import { clampToImage } from "./utils/landmarks";
 import { useT } from "./i18n";
 
 export default App;
@@ -500,11 +501,8 @@ function App() {
         const base = pointIndex * 2;
         if (base < 0 || base + 1 >= nextVector.length) return file;
 
-        const clampedX = Math.min(file.width, Math.max(0, x));
-        const clampedY = Math.min(file.height, Math.max(0, y));
-
-        nextVector[base] = clampedX;
-        nextVector[base + 1] = clampedY;
+        nextVector[base] = clampToImage(x, file.width);
+        nextVector[base + 1] = clampToImage(y, file.height);
 
         const nextFile = { ...file, vector: nextVector };
         if (file.check) {
