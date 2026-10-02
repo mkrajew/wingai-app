@@ -31,7 +31,21 @@ type ReviewImagesProps = {
   resetConfirmTrigger: number;
 };
 
-export default function ReviewImages({
+export default function ReviewImages(props: ReviewImagesProps) {
+  const t = useT();
+  const image = props.images[props.index];
+  if (!image) {
+    return <div className="text-muted">{t.noImagesToReview}</div>;
+  }
+  return <ReviewImagesContent {...props} image={image} />;
+}
+
+type ReviewImagesContentProps = ReviewImagesProps & { image: ImageFile };
+
+// All the hooks live here and this part is only rendered while there is an image, so they run in the
+// same order on every render (an early return in front of them would skip some).
+function ReviewImagesContent({
+  image,
   images,
   index,
   isProcessing,
@@ -45,9 +59,8 @@ export default function ReviewImages({
   onDownloadNotice,
   editConfirmTrigger,
   resetConfirmTrigger,
-}: ReviewImagesProps) {
+}: ReviewImagesContentProps) {
   const t = useT();
-  const image = images[index];
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -122,10 +135,6 @@ export default function ReviewImages({
     const nextPos = (currentPos + 1) % checkIndices.length;
     onIndexChange(checkIndices[nextPos]);
   };
-
-  if (!image) {
-    return <div className="text-muted">{t.noImagesToReview}</div>;
-  }
 
   const viewWidth = image.width ?? 0;
   const viewHeight = image.height ?? 0;
