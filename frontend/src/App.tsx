@@ -5,6 +5,7 @@ import ConfirmDialog from "./components/ConfirmDialog";
 import DetectionModelPanel from "./components/DetectionModelPanel";
 import HelpPanel from "./components/HelpPanel";
 import LanguageSwitcher from "./components/LanguageSwitcher";
+import WingOptionSwitches from "./components/WingOptionSwitches";
 import { detectFromUrl } from "./utils/yoloDetector";
 import type { Detection } from "./utils/yoloDetector";
 import {
@@ -977,9 +978,10 @@ function App() {
             </div>
           )}
           <div
-            className="d-flex align-items-center gap-3"
+            className="d-flex flex-wrap align-items-center justify-content-end column-gap-3 row-gap-4"
             style={{ justifySelf: "end" }}
           >
+            <WingOptionSwitches />
             <LanguageSwitcher />
             <HelpPanel />
             <DetectionModelPanel />

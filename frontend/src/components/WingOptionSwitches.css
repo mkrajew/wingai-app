@@ -1,0 +1,163 @@
+/* Per-icon motion for WingOptionSwitches. `.is-playing` is set on a segment
+   (see SegmentedSwitch) when it is clicked; the icon is remounted each time,
+   so the animations always start from the beginning. */
+
+/* view-box makes the transform-origin values below read as viewBox units */
+.wing-icon g,
+.wing-icon path {
+  transform-box: view-box;
+}
+
+/* Model: aligned — the wing levels out, the baseline grows */
+.wing-icon--aligned .wing {
+  transform-origin: 12px 9.4px;
+}
+.wing-icon--aligned .base {
+  transform-origin: 12px 21px;
+}
+.is-playing .wing-icon--aligned .wing {
+  animation: wing-level 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.is-playing .wing-icon--aligned .base {
+  animation: wing-grow 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) 0.12s both;
+}
+@keyframes wing-level {
+  from {
+    transform: rotate(-32deg);
+  }
+  to {
+    transform: rotate(0);
+  }
+}
+@keyframes wing-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Model: rotated — the arrows make a full turn, the wing sways along */
+.wing-icon--rotated .arrows,
+.wing-icon--rotated .wing {
+  transform-origin: 12px 12px;
+}
+.is-playing .wing-icon--rotated .arrows {
+  animation: wing-spin 0.95s cubic-bezier(0.65, 0, 0.25, 1) both;
+}
+.is-playing .wing-icon--rotated .wing {
+  animation: wing-sway 0.95s cubic-bezier(0.45, 0, 0.3, 1) both;
+}
+@keyframes wing-spin {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes wing-sway {
+  0% {
+    transform: rotate(0);
+  }
+  45% {
+    transform: rotate(-16deg);
+  }
+  75% {
+    transform: rotate(5deg);
+  }
+  100% {
+    transform: rotate(0);
+  }
+}
+
+/* Orientation: left / right — the wing flips into place, the arrow is drawn */
+.wing-icon--dir .wing {
+  transform-origin: 12px 9.2px;
+}
+.wing-icon--left .head {
+  transform-origin: 3px 20.4px;
+}
+.wing-icon--right .head {
+  transform-origin: 21px 20.4px;
+}
+.is-playing .wing-icon--dir .wing {
+  animation: wing-flip 0.65s cubic-bezier(0.5, 0, 0.25, 1.3) both;
+}
+.is-playing .wing-icon--dir .line {
+  stroke-dasharray: 1 1;
+  animation: wing-draw 0.42s cubic-bezier(0.3, 0.6, 0.3, 1) 0.22s both;
+}
+.is-playing .wing-icon--dir .head {
+  animation: wing-pop 0.32s cubic-bezier(0.3, 1.7, 0.5, 1) 0.55s both;
+}
+@keyframes wing-flip {
+  from {
+    transform: scaleX(-1);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes wing-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes wing-pop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Orientation: original — the frame focuses like a camera, the wing stays put */
+.wing-icon--original .corners,
+.wing-icon--original .wing {
+  transform-origin: 12px 12px;
+}
+.is-playing .wing-icon--original .corners {
+  animation: wing-focus 0.85s cubic-bezier(0.3, 0.7, 0.3, 1) both;
+}
+.is-playing .wing-icon--original .wing {
+  animation: wing-settle 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) 0.3s both;
+}
+@keyframes wing-focus {
+  0% {
+    transform: scale(1);
+  }
+  28% {
+    transform: scale(1.2);
+  }
+  58% {
+    transform: scale(0.9);
+  }
+  82% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes wing-settle {
+  from {
+    transform: scale(0.88);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-playing .wing-icon * {
+    animation: none !important;
+  }
+}

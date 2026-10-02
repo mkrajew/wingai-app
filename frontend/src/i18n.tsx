@@ -6,6 +6,13 @@ export type Lang = "EN" | "PL";
 export type Translations = {
   // App header / progress
   darkMode: string;
+  orientation: string;
+  orientationLeft: string;
+  orientationOriginal: string;
+  orientationRight: string;
+  wingModel: string;
+  wingModelAligned: string;
+  wingModelRotated: string;
   downloadInProgress: string;
   detectingObjects: string;
   detectingObjectsProgress: (completed: number, total: number) => string;
@@ -101,6 +108,13 @@ export type Translations = {
 
 const en: Translations = {
   darkMode: "Dark mode",
+  orientation: "Orientation",
+  orientationLeft: "Orient all wings to the left",
+  orientationOriginal: "Keep original orientation",
+  orientationRight: "Orient all wings to the right",
+  wingModel: "Model",
+  wingModelAligned: "Model for horizontally aligned wings",
+  wingModelRotated: "Model for rotated wings",
   downloadInProgress: "Download in progress...",
   detectingObjects: "Detecting objects...",
   detectingObjectsProgress: (c, t) => `Detecting objects... ${c}/${t}`,
@@ -254,6 +268,13 @@ const en: Translations = {
 
 const pl: Translations = {
   darkMode: "Tryb ciemny",
+  orientation: "Orientacja",
+  orientationLeft: "Ustaw wszystkie skrzydła w lewo",
+  orientationOriginal: "Zachowaj oryginalną orientację",
+  orientationRight: "Ustaw wszystkie skrzydła w prawo",
+  wingModel: "Model",
+  wingModelAligned: "Model dla skrzydeł ułożonych poziomo",
+  wingModelRotated: "Model dla obróconych skrzydeł",
   downloadInProgress: "Pobieranie w toku...",
   detectingObjects: "Wykrywanie skrzydeł...",
   detectingObjectsProgress: (c, t) => `Wykrywanie skrzydeł... ${c}/${t}`,
