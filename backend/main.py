@@ -118,10 +118,24 @@ def process_image(image):
         gpa_vals = torch.linalg.norm(models["shape"] - gpa, dim=1)
         check_carefully = gpa_vals.max().item() > 0.04
 
+    # Orientation relative to mean_shape's own chirality: the best rotation-
+    # or-reflection alignment to mean_shape needing a reflection (det<0)
+    # means this wing is mirrored relative to mean_shape ("left"); a plain
+    # rotation fitting as well or better (det>0) means it already shares
+    # mean_shape's chirality ("right"). Computed unconditionally (even when
+    # check_carefully is True) so the caller can decide whether to trust it
+    # alongside that flag, rather than silently omitting it on uncertain
+    # detections.
+    r = procrustes_align(
+        normalize_shape(center_shape(coordinates)), models["shape"],
+        only_matrix=True, allow_reflection=True,
+    )
+    orientation = "left" if torch.det(r).item() < 0 else "right"
+
     coordinates[:, 1] = y_size - coordinates[:, 1] - 1
     coordinates = coordinates.detach().flatten().tolist()
 
-    return coordinates, check_carefully
+    return coordinates, check_carefully, orientation
 
 
 @app.post("/analyze")
@@ -136,7 +150,9 @@ async def analyze(
 
     loop = asyncio.get_event_loop()
     try:
-        coords, check = await loop.run_in_executor(None, process_image, encoded)
+        coords, check, orientation = await loop.run_in_executor(
+            None, process_image, encoded
+        )
     except LoadImageError:
         raise HTTPException(
             status_code=422, detail="Could not decode the uploaded image."
@@ -145,7 +161,9 @@ async def analyze(
         logger.exception(f"Image analysis failed for {file.filename!r}")
         raise HTTPException(status_code=500, detail="Image analysis failed.")
 
-    return JSONResponse(content={"coords": coords, "check": check})
+    return JSONResponse(
+        content={"coords": coords, "check": check, "orientation": orientation}
+    )
 
 
 class LoadImageError(Exception):
