@@ -22,8 +22,8 @@ from wings.gpa import (
     procrustes_align,
     normalize_shape,
     center_shape,
+    FULL_ROTATION_MULTISTART_ANGLES,
 )
-
 
 models = {}
 
@@ -32,7 +32,7 @@ models = {}
 async def lifespan(app: FastAPI):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     kernel_size = 5
-    checkpoint_path = MODELS_DIR / f"unet-final-k{kernel_size}.ckpt"
+    checkpoint_path = MODELS_DIR / f"final-rotation.ckpt"
 
     unet_model = UNet(in_channels=1, out_channels=1, kernel_size=kernel_size)
     model = (
@@ -81,9 +81,20 @@ def process_image(image):
     check_carefully = len(mask_coords) < 19 or len(mask_coords) > 22
 
     try:
-        coordinates = handle_coordinates(mask_coords, models["shape"])
-        # coordinates[:, 1] = y_size - coordinates[:, 1] - 1
-        # coordinates = coordinates.detach().flatten().long().tolist()
+        # allow_reflection=True: the model may detect landmarks on a
+        # horizontally-mirrored wing too, which a rotation-only match can't
+        # align correctly against mean_coords even when detection itself is
+        # fine. multistart_angles/pca_prealign: a real uploaded photo could
+        # be rotated by any amount -- without these, the correspondence
+        # search can get stuck in a wrong landmark ordering near hard angles
+        # like 90 degrees even though detection itself is accurate.
+        coordinates = handle_coordinates(
+            mask_coords,
+            models["shape"],
+            allow_reflection=True,
+            multistart_angles=FULL_ROTATION_MULTISTART_ANGLES,
+            pca_prealign=True,
+        )
     except Exception:
         check_carefully = True
         if len(mask_coords) > 19:
@@ -99,8 +110,10 @@ def process_image(image):
         coordinates = mask_coords
 
     if not check_carefully:
+        # Same reflection allowance as above: coordinates may still be in a
+        # mirrored spatial arrangement even after correct identity matching.
         gpa = procrustes_align(
-            normalize_shape(center_shape(coordinates)), models["shape"]
+            normalize_shape(center_shape(coordinates)), models["shape"], allow_reflection=True
         )
         gpa_vals = torch.linalg.norm(models["shape"] - gpa, dim=1)
         check_carefully = gpa_vals.max().item() > 0.04
