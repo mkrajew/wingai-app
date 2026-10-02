@@ -23,13 +23,24 @@ export default function SegmentedSwitch<V extends string>({
 }: Props<V>) {
   const labelId = useId();
   const segRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  // The segment whose icon animation last played. `run` changes on every
-  // click, so re-clicking the active option replays its animation.
+  // The segment whose icon animation last played. `run` changes every time an
+  // animation is started, so re-clicking the active option replays it.
   const [played, setPlayed] = useState<{ index: number; run: number } | null>(
     null,
   );
 
   const activeIndex = options.findIndex((o) => o.value === value);
+
+  // The active segment also changes when the parent changes `value` by itself
+  // (e.g. the other switch forcing this one). Play the new segment's animation
+  // then too; a change caused by a click here has already queued its own.
+  const [seenIndex, setSeenIndex] = useState(activeIndex);
+  if (seenIndex !== activeIndex) {
+    setSeenIndex(activeIndex);
+    if (played?.index !== activeIndex) {
+      setPlayed({ index: activeIndex, run: (played?.run ?? 0) + 1 });
+    }
+  }
 
   const select = (index: number) => {
     onChange(options[index].value);

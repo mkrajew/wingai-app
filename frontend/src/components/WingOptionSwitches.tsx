@@ -1,13 +1,9 @@
-import { useState } from "react";
 import type { ReactNode } from "react";
 import { useT } from "../i18n";
+import type { WingModel, WingOrientation } from "../utils/wingOptions";
 import SegmentedSwitch from "./SegmentedSwitch";
 import type { SegmentedOption } from "./SegmentedSwitch";
 import "./WingOptionSwitches.css";
-
-type Orientation = "left" | "original" | "right";
-// Values are what the backend's /analyze takes as its `model` field.
-export type WingModel = "precise" | "rotation";
 
 // Geometry is the same as public/wingai-*.svg. It is inlined (instead of
 // <img src>) and split into named parts so each part can be animated.
@@ -129,15 +125,20 @@ function ModelRotatedIcon() {
 
 type Props = {
   model: WingModel;
+  orientation: WingOrientation;
   onModelChange: (model: WingModel) => void;
+  onOrientationChange: (orientation: WingOrientation) => void;
 };
 
-export default function WingOptionSwitches({ model, onModelChange }: Props) {
+export default function WingOptionSwitches({
+  model,
+  orientation,
+  onModelChange,
+  onOrientationChange,
+}: Props) {
   const t = useT();
-  // Local state only: the orientation switch is not wired into the pipeline yet.
-  const [orientation, setOrientation] = useState<Orientation>("original");
 
-  const orientationOptions: SegmentedOption<Orientation>[] = [
+  const orientationOptions: SegmentedOption<WingOrientation>[] = [
     { value: "left", label: t.orientationLeft, icon: <OrientationLeftIcon /> },
     {
       value: "original",
@@ -162,7 +163,7 @@ export default function WingOptionSwitches({ model, onModelChange }: Props) {
         label={t.orientation}
         options={orientationOptions}
         value={orientation}
-        onChange={setOrientation}
+        onChange={onOrientationChange}
       />
       <SegmentedSwitch
         label={t.wingModel}

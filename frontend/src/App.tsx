@@ -6,7 +6,6 @@ import DetectionModelPanel from "./components/DetectionModelPanel";
 import HelpPanel from "./components/HelpPanel";
 import LanguageSwitcher from "./components/LanguageSwitcher";
 import WingOptionSwitches from "./components/WingOptionSwitches";
-import type { WingModel } from "./components/WingOptionSwitches";
 import { detectFromUrl } from "./utils/yoloDetector";
 import type { Detection } from "./utils/yoloDetector";
 import {
@@ -26,6 +25,12 @@ import {
 } from "./utils/image";
 import type { ImageTransform } from "./utils/image";
 import { mapWithConcurrency } from "./utils/async";
+import {
+  DEFAULT_WING_OPTIONS,
+  chooseModel,
+  chooseOrientation,
+} from "./utils/wingOptions";
+import type { WingModel } from "./utils/wingOptions";
 import { useT } from "./i18n";
 
 export default App;
@@ -86,8 +91,9 @@ function App() {
   const [reviewIndex, setReviewIndex] = useState(0);
   const [showDownloadNotice, setShowDownloadNotice] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
-  // Which landmark model the backend runs; read once, when Process is clicked.
-  const [wingModel, setWingModel] = useState<WingModel>("rotation");
+  // The header's Model and Orientation switches; chooseModel / chooseOrientation
+  // keep them consistent. The model is read once, when Process is clicked.
+  const [wingOptions, setWingOptions] = useState(DEFAULT_WING_OPTIONS);
   const [editConfirmTrigger, setEditConfirmTrigger] = useState(0);
   const [resetConfirmTrigger, setResetConfirmTrigger] = useState(0);
   const [isUploadResetConfirmOpen, setIsUploadResetConfirmOpen] = useState(false);
@@ -760,7 +766,10 @@ function App() {
     setReviewIndex(0);
 
     try {
-      const processed = await processImagesWithBackend(toProcess, wingModel);
+      const processed = await processImagesWithBackend(
+        toProcess,
+        wingOptions.model,
+      );
       setImageFiles(processed);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
@@ -988,7 +997,18 @@ function App() {
             className="d-flex flex-wrap align-items-center justify-content-end column-gap-3 row-gap-4"
             style={{ justifySelf: "end" }}
           >
-            <WingOptionSwitches model={wingModel} onModelChange={setWingModel} />
+            <WingOptionSwitches
+              model={wingOptions.model}
+              orientation={wingOptions.orientation}
+              onModelChange={(model) =>
+                setWingOptions((options) => chooseModel(options, model))
+              }
+              onOrientationChange={(orientation) =>
+                setWingOptions((options) =>
+                  chooseOrientation(options, orientation),
+                )
+              }
+            />
             <LanguageSwitcher />
             <HelpPanel />
             <DetectionModelPanel />
