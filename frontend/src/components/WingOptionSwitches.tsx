@@ -6,7 +6,8 @@ import type { SegmentedOption } from "./SegmentedSwitch";
 import "./WingOptionSwitches.css";
 
 type Orientation = "left" | "original" | "right";
-type WingModel = "aligned" | "rotated";
+// Values are what the backend's /analyze takes as its `model` field.
+export type WingModel = "precise" | "rotation";
 
 // Geometry is the same as public/wingai-*.svg. It is inlined (instead of
 // <img src>) and split into named parts so each part can be animated.
@@ -126,11 +127,15 @@ function ModelRotatedIcon() {
   );
 }
 
-export default function WingOptionSwitches() {
+type Props = {
+  model: WingModel;
+  onModelChange: (model: WingModel) => void;
+};
+
+export default function WingOptionSwitches({ model, onModelChange }: Props) {
   const t = useT();
-  // Local state only: the switches are not wired into the pipeline yet.
+  // Local state only: the orientation switch is not wired into the pipeline yet.
   const [orientation, setOrientation] = useState<Orientation>("original");
-  const [model, setModel] = useState<WingModel>("aligned");
 
   const orientationOptions: SegmentedOption<Orientation>[] = [
     { value: "left", label: t.orientationLeft, icon: <OrientationLeftIcon /> },
@@ -147,8 +152,8 @@ export default function WingOptionSwitches() {
   ];
 
   const modelOptions: SegmentedOption<WingModel>[] = [
-    { value: "aligned", label: t.wingModelAligned, icon: <ModelAlignedIcon /> },
-    { value: "rotated", label: t.wingModelRotated, icon: <ModelRotatedIcon /> },
+    { value: "precise", label: t.wingModelAligned, icon: <ModelAlignedIcon /> },
+    { value: "rotation", label: t.wingModelRotated, icon: <ModelRotatedIcon /> },
   ];
 
   return (
@@ -163,7 +168,7 @@ export default function WingOptionSwitches() {
         label={t.wingModel}
         options={modelOptions}
         value={model}
-        onChange={setModel}
+        onChange={onModelChange}
       />
     </>
   );

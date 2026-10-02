@@ -6,6 +6,7 @@ import DetectionModelPanel from "./components/DetectionModelPanel";
 import HelpPanel from "./components/HelpPanel";
 import LanguageSwitcher from "./components/LanguageSwitcher";
 import WingOptionSwitches from "./components/WingOptionSwitches";
+import type { WingModel } from "./components/WingOptionSwitches";
 import { detectFromUrl } from "./utils/yoloDetector";
 import type { Detection } from "./utils/yoloDetector";
 import {
@@ -85,6 +86,8 @@ function App() {
   const [reviewIndex, setReviewIndex] = useState(0);
   const [showDownloadNotice, setShowDownloadNotice] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+  // Which landmark model the backend runs; read once, when Process is clicked.
+  const [wingModel, setWingModel] = useState<WingModel>("rotation");
   const [editConfirmTrigger, setEditConfirmTrigger] = useState(0);
   const [resetConfirmTrigger, setResetConfirmTrigger] = useState(0);
   const [isUploadResetConfirmOpen, setIsUploadResetConfirmOpen] = useState(false);
@@ -550,6 +553,7 @@ function App() {
     image: ImageFile,
     width: number,
     height: number,
+    model: WingModel,
     signal: AbortSignal,
   ) {
     const formData = new FormData();
@@ -557,6 +561,7 @@ function App() {
     formData.append("file", uploadBlob, image.filename);
     formData.append("x_size", String(width));
     formData.append("y_size", String(height));
+    formData.append("model", model);
 
     const response = await fetch("/api/analyze", {
       method: "POST",
@@ -642,6 +647,7 @@ function App() {
 
   async function processImagesWithBackend(
     images: ImageFile[],
+    model: WingModel,
     existing: ImageFile[] = [],
   ) {
     if (images.length === 0) return [];
@@ -695,6 +701,7 @@ function App() {
               prepared,
               width,
               height,
+              model,
               signal,
             );
             return {
@@ -753,7 +760,7 @@ function App() {
     setReviewIndex(0);
 
     try {
-      const processed = await processImagesWithBackend(toProcess);
+      const processed = await processImagesWithBackend(toProcess, wingModel);
       setImageFiles(processed);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
@@ -981,7 +988,7 @@ function App() {
             className="d-flex flex-wrap align-items-center justify-content-end column-gap-3 row-gap-4"
             style={{ justifySelf: "end" }}
           >
-            <WingOptionSwitches />
+            <WingOptionSwitches model={wingModel} onModelChange={setWingModel} />
             <LanguageSwitcher />
             <HelpPanel />
             <DetectionModelPanel />
