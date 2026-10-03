@@ -53,7 +53,7 @@ MODEL_SPECS = {
     # mirrored or rotated wing simply comes out flagged (check_carefully).
     WingModel.precise: ModelSpec("final-precise.ckpt", {}),
     WingModel.rotation: ModelSpec(
-        "final-rotation.ckpt",
+        "final-rotation-2.ckpt",
         # allow_reflection=True: the model may detect landmarks on a
         # horizontally-mirrored wing too, which a rotation-only match can't
         # align correctly against mean_coords even when detection itself is
