@@ -79,6 +79,24 @@ export async function renderTransformedImage(
 }
 
 /**
+ * A horizontally mirrored copy of an image: a PNG file with the given name, and the object URL to
+ * show it from (the caller revokes it). Pixel c of the copy is pixel width - 1 - c of the image.
+ */
+export async function mirrorImageHorizontally(
+  src: string,
+  filename: string,
+  lastModified: number = Date.now(),
+) {
+  const { blob, width, height } = await renderTransformedImage(
+    src,
+    { type: "flip", axis: "horizontal" },
+    "image/png",
+  );
+  const file = new File([blob], filename, { type: "image/png", lastModified });
+  return { file, previewUrl: URL.createObjectURL(blob), width, height };
+}
+
+/**
  * Renders a small, downscaled JPEG thumbnail of an image. Used for list
  * previews so the browser never has to decode the full-resolution image just
  * to paint a tiny thumbnail. Aspect ratio is preserved; `maxEdge` caps the

@@ -15,6 +15,24 @@ export const fromSvg = (svg: number) => svg - PIXEL_CENTER;
 export const clampToImage = (index: number, size: number) =>
   Math.min(size - 1, Math.max(0, index));
 
+// Math.round sends a coordinate that is exactly between two pixels up. After mirroring "up" is the
+// other way, so such a coordinate is nudged by a hair to keep rounding to the mirror image of the
+// pixel it rounded to before.
+const TIE_NUDGE = 1e-9;
+
+/**
+ * The landmarks (x1, y1, x2, y2, ...) of the same picture mirrored horizontally. The picture is
+ * `width` pixels wide, so pixel c becomes pixel width - 1 - c: every landmark stays on the same
+ * spot of the picture. The rows do not change.
+ */
+export function mirrorLandmarks(vector: number[], width: number) {
+  return vector.map((value, i) => {
+    if (i % 2 === 1 || !Number.isFinite(value)) return value;
+    const mirrored = width - 1 - value;
+    return Math.abs(mirrored % 1) === 0.5 ? mirrored - TIE_NUDGE : mirrored;
+  });
+}
+
 /** IdentiFly metadata, "landmarks:x1 y1 x2 y2 ...;", counted from the top-left corner. */
 export function buildLandmarksMetadata(vector: number[]) {
   const values: number[] = [];

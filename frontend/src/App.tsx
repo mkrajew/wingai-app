@@ -19,6 +19,7 @@ import {
 import {
   loadImage,
   loadImageDimensions,
+  mirrorImageHorizontally,
   renderTransformedImage,
   renderThumbnail,
   canvasToBlob,
@@ -29,9 +30,11 @@ import {
   DEFAULT_WING_OPTIONS,
   chooseModel,
   chooseOrientation,
+  needsMirroring,
+  orientationToApply,
 } from "./utils/wingOptions";
-import type { WingModel } from "./utils/wingOptions";
-import { clampToImage } from "./utils/landmarks";
+import type { WingModel, WingOptions } from "./utils/wingOptions";
+import { clampToImage, mirrorLandmarks } from "./utils/landmarks";
 import { useT } from "./i18n";
 
 export default App;
@@ -93,7 +96,7 @@ function App() {
   const [showDownloadNotice, setShowDownloadNotice] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   // The header's Model and Orientation switches; chooseModel / chooseOrientation
-  // keep them consistent. The model is read once, when Process is clicked.
+  // keep them consistent. Both are read once, when Process is clicked.
   const [wingOptions, setWingOptions] = useState(DEFAULT_WING_OPTIONS);
   const [editConfirmTrigger, setEditConfirmTrigger] = useState(0);
   const [resetConfirmTrigger, setResetConfirmTrigger] = useState(0);
@@ -582,6 +585,7 @@ function App() {
     const data = (await response.json()) as {
       coords?: unknown;
       check?: unknown;
+      orientation?: unknown;
     };
     const coords = Array.isArray(data.coords)
       ? data.coords.map((value) => Number(value))
@@ -601,7 +605,7 @@ function App() {
       check = Boolean(data.check);
     }
 
-    return { coords, check };
+    return { coords, check, orientation: data.orientation };
   }
 
   async function cropImageToBoundingBox(image: ImageFile): Promise<ImageFile> {
@@ -651,11 +655,13 @@ function App() {
 
   async function processImagesWithBackend(
     images: ImageFile[],
-    model: WingModel,
+    options: WingOptions,
     existing: ImageFile[] = [],
   ) {
     if (images.length === 0) return [];
 
+    const { model } = options;
+    const orientation = orientationToApply(options);
     const abortController = new AbortController();
     processingAbortRef.current = abortController;
     const { signal } = abortController;
@@ -708,10 +714,47 @@ function App() {
               model,
               signal,
             );
+            let landmarks = analysis.coords;
+            if (needsMirroring(orientation, analysis.orientation)) {
+              // The picture and its landmarks are mirrored together. If that fails, the wing
+              // stays as it was with its original landmarks, never one mirrored without the other.
+              try {
+                const mirrored = await mirrorImageHorizontally(
+                  prepared.previewUrl,
+                  prepared.filename,
+                  prepared.file.lastModified,
+                );
+                if (
+                  signal.aborted ||
+                  mirrored.width !== width ||
+                  mirrored.height !== height
+                ) {
+                  URL.revokeObjectURL(mirrored.previewUrl);
+                  throw signal.aborted
+                    ? signal.reason
+                    : new Error("The mirrored image has other dimensions.");
+                }
+                // The original previewUrl stays alive in the upload snapshot, "Edit" restores it.
+                prepared = {
+                  ...prepared,
+                  file: mirrored.file,
+                  previewUrl: mirrored.previewUrl,
+                  thumbUrl: undefined,
+                };
+                landmarks = mirrorLandmarks(analysis.coords, width);
+              } catch (error) {
+                if (signal.aborted) throw error;
+                console.warn(
+                  "Failed to mirror the image, keeping its orientation.",
+                  prepared.filename,
+                  error,
+                );
+              }
+            }
             return {
               ...prepared,
               filename: toDwPngFilename(prepared.filename),
-              vector: analysis.coords,
+              vector: landmarks,
               check: analysis.check,
               status: "done",
               width,
@@ -764,10 +807,7 @@ function App() {
     setReviewIndex(0);
 
     try {
-      const processed = await processImagesWithBackend(
-        toProcess,
-        wingOptions.model,
-      );
+      const processed = await processImagesWithBackend(toProcess, wingOptions);
       setImageFiles(processed);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {

@@ -40,3 +40,23 @@ export function chooseOrientation(
         : options.model,
   };
 }
+
+// The side to orient the wings to when processing. Only the rotation model gets one,
+// the precise model keeps the wings as they are.
+export function orientationToApply(options: WingOptions): WingOrientation {
+  return options.model === "rotation" ? options.orientation : "original";
+}
+
+// The backend says whether a wing is "left" or "right". It has to be mirrored when it is
+// on the other side than the wanted one. With no wanted side, or an answer that is not
+// one of the two, the wing is left alone.
+export function needsMirroring(
+  wanted: WingOrientation,
+  detected: unknown,
+): boolean {
+  return (
+    (wanted === "left" || wanted === "right") &&
+    (detected === "left" || detected === "right") &&
+    detected !== wanted
+  );
+}
