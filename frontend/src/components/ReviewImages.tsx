@@ -189,12 +189,14 @@ function ReviewImagesContent({
     setIsResetConfirmOpen(true);
   }, [resetConfirmTrigger]);
 
+  // Also when the picture of the open photo is replaced (the crop arrives), because the old zoom and pan
+  // were set on another picture.
   useEffect(() => {
     setZoom(1);
     setPanOffset({ x: 0, y: 0 });
     setIsPanning(false);
     zoomInputRef.current?.blur();
-  }, [index]);
+  }, [index, image.previewUrl]);
 
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: "nearest" });
@@ -632,6 +634,8 @@ function ReviewImagesContent({
               value={renameValue}
               onChange={(event) => setRenameValue(event.target.value)}
               ref={renameInputRef}
+              // The name is set when the photo is processed, a name typed before would be replaced.
+              disabled={isProcessing}
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
                 commitRename();
@@ -720,7 +724,7 @@ function ReviewImagesContent({
           >
             {images.map((item, idx) => (
               <button
-                key={item.filename}
+                key={item.id}
                 type="button"
                 className={`list-group-item list-group-item-action ${
                   idx === index ? "active" : ""
