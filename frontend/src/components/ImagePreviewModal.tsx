@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { formatBytes } from "../utils";
 import type { ImageFile, Detection } from "../App";
-import { checkboxAnchor } from "../utils/obb";
+import { inCheckbox, tagFrame } from "../utils/obb";
 import { useT } from "../i18n";
 
 const CHECKBOX_SIZE = 14;
@@ -127,17 +127,23 @@ export default function ImagePreviewModal({
         ctx.setLineDash([]);
         ctx.globalAlpha = 1.0;
 
-        const { cbX, cbY, anchorY } = checkboxAnchor(
-          det.corners, scaleX, scaleY, dispW, dispH, CHECKBOX_SIZE,
-        );
+        // The tag (checkbox and confidence label) is one rectangle. It is drawn in its own frame:
+        // the origin is the corner it is attached to and the x axis runs along the flatter edge.
+        const tag = tagFrame(det.corners, scaleX, scaleY, dispW, dispH, CHECKBOX_SIZE);
+        const cbX = tag.dir > 0 ? 0 : -CHECKBOX_SIZE;
+        const cbY = tag.side < 0 ? -CHECKBOX_SIZE : 0;
+        ctx.save();
+        ctx.translate(tag.x, tag.y);
+        ctx.rotate(tag.angle);
 
         if (showConf && !isExcluded) {
           const label = (det.confidence * 100).toFixed(1) + "%";
           const textW = ctx.measureText(label).width;
+          const labelX = tag.dir > 0 ? CHECKBOX_SIZE : -CHECKBOX_SIZE - (textW + 6);
           ctx.fillStyle = color;
-          ctx.fillRect(cbX + CHECKBOX_SIZE, cbY, textW + 6, CHECKBOX_SIZE);
+          ctx.fillRect(labelX, cbY, textW + 6, CHECKBOX_SIZE);
           ctx.fillStyle = "#000";
-          ctx.fillText(label, cbX + CHECKBOX_SIZE + 3, anchorY);
+          ctx.fillText(label, labelX + 3, cbY + CHECKBOX_SIZE);
         }
 
         ctx.fillStyle = isExcluded ? "rgba(140,140,140,0.95)" : color;
@@ -156,6 +162,7 @@ export default function ImagePreviewModal({
           ctx.lineTo(cbX + CHECKBOX_SIZE - 2, cbY + 2);
         }
         ctx.stroke();
+        ctx.restore();
       }
     },
     [],
@@ -398,10 +405,10 @@ export default function ImagePreviewModal({
 
                   // Check checkbox clicks first
                   for (let i = 0; i < detections.length; i++) {
-                    const { cbX, cbY } = checkboxAnchor(
+                    const tag = tagFrame(
                       detections[i].corners, scaleX, scaleY, canvas.width, canvas.height, CHECKBOX_SIZE,
                     );
-                    if (mouseX >= cbX && mouseX <= cbX + CHECKBOX_SIZE && mouseY >= cbY && mouseY <= cbY + CHECKBOX_SIZE) {
+                    if (inCheckbox(tag, mouseX, mouseY, CHECKBOX_SIZE)) {
                       onToggleDetectionExclusion(previewIndex, i);
                       return;
                     }

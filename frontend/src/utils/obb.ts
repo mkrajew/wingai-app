@@ -126,27 +126,111 @@ export function axisAngle(w: number, h: number, angle: number) {
 }
 
 /**
- * Where the checkbox of a detection goes, in canvas pixels. It sits above the highest corner (the
- * left one when two are level). When there is no room above, it sits under the lowest corner. The
- * checkbox always stays inside the canvas, also when corners lie outside the photo, so it can be
- * clicked. anchorY is the baseline of the confidence label next to it.
+ * The frame of the tag of a detection, in canvas pixels. The tag is one rectangle: the checkbox
+ * (size x size) at the corner and the confidence label next to it. It is attached to the highest
+ * corner (the lowest when there is no room above, the left one when two are level), lies outside
+ * the detection and turns with the flatter of the two edges that meet at that corner.
+ *
+ * In the frame the origin is the corner and the x axis is the reading direction of the text, so the
+ * text is never upside down: angle is in [-pi/2, pi/2]. The y axis points down in that frame.
+ *   dir  1: the tag extends to +x from the corner, [checkbox][label].
+ *        -1: it extends to -x, [label][checkbox]. The checkbox is at the corner either way.
+ *   side -1: the tag is above the edge line (y from -size to 0). 1: it is below it (y from 0 to size).
+ * When the turned checkbox does not fit in the canvas (a corner near or outside the photo), the tag
+ * is the flat one, moved into the canvas so that it can still be clicked, and flat is true.
  */
-export function checkboxAnchor(
+export type TagFrame = {
+  x: number;
+  y: number;
+  angle: number;
+  dir: 1 | -1;
+  side: 1 | -1;
+  flat: boolean;
+};
+
+export function tagFrame(
   corners: Point[],
   scaleX: number,
   scaleY: number,
   canvasW: number,
   canvasH: number,
   size: number,
-) {
+): TagFrame {
   const pts = corners.map(([x, y]) => [x * scaleX, y * scaleY] as const);
   const top = pts.reduce((a, b) =>
     b[1] < a[1] || (b[1] === a[1] && b[0] < a[0]) ? b : a,
   );
-  const bottom = pts.reduce((a, b) => (b[1] > a[1] ? b : a));
+  const bottom = pts.reduce((a, b) =>
+    b[1] > a[1] || (b[1] === a[1] && b[0] < a[0]) ? b : a,
+  );
   const above = top[1] > size;
-  const anchor = above ? top : bottom;
-  const cbX = clamp(anchor[0], 0, canvasW - size);
-  const cbY = clamp((above ? top[1] : bottom[1] + size) - size, 0, canvasH - size);
-  return { cbX, cbY, anchorY: cbY + size };
+  const corner = above ? top : bottom;
+
+  // The two edges that meet at the corner, as vectors away from it. The flatter one is the one
+  // closer to horizontal. When both are equally flat, the one going right.
+  const k = pts.indexOf(corner);
+  const edges = [pts[(k + 1) % 4], pts[(k + 3) % 4]].map(
+    ([x, y]) => [x - corner[0], y - corner[1]] as const,
+  );
+  const flatness = ([dx, dy]: readonly [number, number]) => {
+    const length = Math.hypot(dx, dy);
+    return length > 0 ? Math.abs(dy) / length : Infinity;
+  };
+  const [f0, f1] = edges.map(flatness);
+  const edge =
+    Math.abs(f0 - f1) < 1e-9
+      ? edges[0][0] >= edges[1][0]
+        ? edges[0]
+        : edges[1]
+      : f0 < f1
+        ? edges[0]
+        : edges[1];
+
+  const goesRight = edge[0] >= 0;
+  const angle = goesRight
+    ? Math.atan2(edge[1], edge[0])
+    : Math.atan2(-edge[1], -edge[0]);
+  const dir = goesRight ? 1 : -1;
+
+  // The tag goes on the side of the edge line that the detection is not on.
+  const mx = pts.reduce((sum, p) => sum + p[0], 0) / pts.length;
+  const my = pts.reduce((sum, p) => sum + p[1], 0) / pts.length;
+  const inward =
+    (mx - corner[0]) * -Math.sin(angle) + (my - corner[1]) * Math.cos(angle);
+  const side = inward > 0 ? -1 : 1;
+
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const x0 = dir > 0 ? 0 : -size;
+  const y0 = side < 0 ? -size : 0;
+  const fits = [0, size].every((dx) =>
+    [0, size].every((dy) => {
+      const px = corner[0] + (x0 + dx) * c - (y0 + dy) * s;
+      const py = corner[1] + (x0 + dx) * s + (y0 + dy) * c;
+      return px >= -1e-6 && px <= canvasW + 1e-6 && py >= -1e-6 && py <= canvasH + 1e-6;
+    }),
+  );
+  if (fits) return { x: corner[0], y: corner[1], angle, dir, side, flat: false };
+
+  const flatX = clamp(corner[0], 0, canvasW - size);
+  const flatY = clamp(above ? top[1] - size : bottom[1], 0, canvasH - size);
+  return above
+    ? { x: flatX, y: flatY + size, angle: 0, dir: 1, side: -1, flat: true }
+    : { x: flatX, y: flatY, angle: 0, dir: 1, side: 1, flat: true };
+}
+
+/** Whether the canvas point (px, py) is inside the checkbox of a tag frame. */
+export function inCheckbox(
+  frame: TagFrame,
+  px: number,
+  py: number,
+  size: number,
+) {
+  const dx = px - frame.x;
+  const dy = py - frame.y;
+  const lx = dx * Math.cos(frame.angle) + dy * Math.sin(frame.angle);
+  const ly = -dx * Math.sin(frame.angle) + dy * Math.cos(frame.angle);
+  const x0 = frame.dir > 0 ? 0 : -size;
+  const y0 = frame.side < 0 ? -size : 0;
+  return lx >= x0 && lx <= x0 + size && ly >= y0 && ly <= y0 + size;
 }
