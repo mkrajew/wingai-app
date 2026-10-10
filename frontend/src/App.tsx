@@ -535,8 +535,20 @@ function App() {
 
   async function normalizeJpegToPng(image: ImageFile) {
     if (!isJpegFile(image.file)) return image;
+    const nextFilename = toPngFilename(image.filename);
+    if (image.file.type === "image/png") {
+      // A crop is already a PNG but keeps the name of its photo (*.JPG), which is what isJpegFile looks
+      // at. Encoding it again would give the same pixels, so only the name changes.
+      return {
+        ...image,
+        filename: nextFilename,
+        file: new File([image.file], nextFilename, {
+          type: "image/png",
+          lastModified: image.file.lastModified,
+        }),
+      };
+    }
     try {
-      const nextFilename = toPngFilename(image.filename);
       const pngFile = await convertJpegToPng(image.file, nextFilename);
       const nextPreviewUrl = URL.createObjectURL(pngFile);
       // Note: the original previewUrl is intentionally NOT revoked here — it is
