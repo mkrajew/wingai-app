@@ -25,6 +25,7 @@ import {
   canvasToBlob,
 } from "./utils/image";
 import type { ImageTransform } from "./utils/image";
+import { straightenedCrop } from "./utils/obbCrop";
 import { mapWithConcurrency } from "./utils/async";
 import {
   DEFAULT_WING_OPTIONS,
@@ -424,17 +425,12 @@ function App() {
 
     for (let n = 0; n < toExtract.length; n++) {
       const { det } = toExtract[n];
-      const x1 = Math.max(0, Math.round(det.x1));
-      const y1 = Math.max(0, Math.round(det.y1));
-      const cropW = Math.max(1, Math.round(det.x2) - x1);
-      const cropH = Math.max(1, Math.round(det.y2) - y1);
-
-      const canvas = document.createElement("canvas");
-      canvas.width = cropW;
-      canvas.height = cropH;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) continue;
-      ctx.drawImage(srcImg, x1, y1, cropW, cropH, 0, 0, cropW, cropH);
+      let canvas: HTMLCanvasElement;
+      try {
+        canvas = straightenedCrop(srcImg, det);
+      } catch {
+        continue;
+      }
 
       const blob = await canvasToBlob(canvas, "image/png");
 
@@ -447,8 +443,8 @@ function App() {
         file,
         previewUrl: URL.createObjectURL(blob),
         status: "new",
-        width: cropW,
-        height: cropH,
+        width: canvas.width,
+        height: canvas.height,
       });
     }
 
@@ -619,20 +615,9 @@ function App() {
         ? dets[image.selectedDetectionIndex]
         : dets.reduce((best, det) => det.confidence > best.confidence ? det : best);
 
-    const x1 = Math.max(0, Math.round(topDet.x1));
-    const y1 = Math.max(0, Math.round(topDet.y1));
-    const cropW = Math.max(1, Math.round(topDet.x2) - x1);
-    const cropH = Math.max(1, Math.round(topDet.y2) - y1);
-
     try {
       const srcImg = await loadImage(image.previewUrl);
-      const canvas = document.createElement("canvas");
-      canvas.width = cropW;
-      canvas.height = cropH;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return image;
-      ctx.drawImage(srcImg, x1, y1, cropW, cropH, 0, 0, cropW, cropH);
-
+      const canvas = straightenedCrop(srcImg, topDet);
       const blob = await canvasToBlob(canvas, "image/png");
 
       const croppedFile = new File([blob], image.filename, {
@@ -644,8 +629,8 @@ function App() {
         ...image,
         file: croppedFile,
         previewUrl: URL.createObjectURL(blob),
-        width: cropW,
-        height: cropH,
+        width: canvas.width,
+        height: canvas.height,
       };
     } catch (err) {
       console.warn("Failed to crop image, using original.", image.filename, err);
