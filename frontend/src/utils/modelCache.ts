@@ -5,5 +5,5 @@
  * (DetectionModelPanel) can't drift: if these two values disagree, a model
  * the user loaded would silently not be found at detection time.
  */
-export const MODEL_URL = "/models/detector.onnx";
+export const MODEL_URL = "/models/best-dota.onnx";
 export const CACHE_NAME = "wingai-models-v1";
