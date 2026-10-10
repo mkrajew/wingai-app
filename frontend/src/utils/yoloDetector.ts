@@ -1,5 +1,6 @@
 import * as ort from "onnxruntime-web/wasm";
 import { MODEL_URL, CACHE_NAME } from "./modelCache";
+import { axisAlignedGeometry, decodeObbRows } from "./obb";
 
 // Serve WASM/MJS files from the root so their filenames stay unhashed.
 // The ortAssetsPlugin in vite.config.ts copies them there during build
@@ -10,6 +11,7 @@ ort.env.wasm.numThreads = 1;
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export type Detection = {
+  // The axis-aligned box around the detection, clipped to the photo.
   x1: number;
   y1: number;
   x2: number;
@@ -17,6 +19,15 @@ export type Detection = {
   confidence: number;
   classId: number;
   className: string;
+  // The detection as a rotated rectangle, in photo pixels. The angle is in radians (the y axis points
+  // down) and w runs along (cos angle, sin angle). The corners are not clipped to the photo. An
+  // axis-aligned detection is the same rectangle with angle 0.
+  cx: number;
+  cy: number;
+  w: number;
+  h: number;
+  angle: number;
+  corners: [number, number][];
 };
 
 // ─── Configuration ─────────────────────────────────────────────────────────────
@@ -298,6 +309,7 @@ function makeDetection(
     confidence,
     classId,
     className: classNames[classId] ?? `class_${classId}`,
+    ...axisAlignedGeometry(x1, y1, x2, y2),
   };
 }
 
@@ -313,6 +325,12 @@ function decodeBoxes(
   const data = output.data as Float32Array;
   const [, dim1, dim2] = output.dims as [number, number, number];
   const numClasses = classNames.length;
+
+  // End-to-end OBB model [1, N, 7]: rows of [cx, cy, w, h, conf, class, angle], NMS already applied.
+  // Checked first, because none of the formats below describes this shape.
+  if (dim2 === 7 && dim1 > dim2) {
+    return decodeObbRows(data, dim1, dim2, scale, padX, padY, origW, origH);
+  }
 
   const maxVal = data.reduce((m, v) => (v > m ? v : m), -Infinity);
 
@@ -363,6 +381,7 @@ function decodeBoxes(
         confidence: conf,
         classId,
         className: classNames[classId] ?? `class_${classId}`,
+        ...axisAlignedGeometry(x1, y1, x2, y2),
       });
     }
     // NMS already applied by model — skip additional NMS
