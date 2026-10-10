@@ -26,6 +26,7 @@ import {
 } from "./utils/image";
 import type { ImageTransform } from "./utils/image";
 import { straightenedCrop } from "./utils/obbCrop";
+import { mainDetectionIndex } from "./utils/mainDetection";
 import { mapWithConcurrency } from "./utils/async";
 import {
   DEFAULT_WING_OPTIONS,
@@ -610,14 +611,17 @@ function App() {
       return image;
     }
 
-    const topDet =
-      image.selectedDetectionIndex !== undefined && dets[image.selectedDetectionIndex]
-        ? dets[image.selectedDetectionIndex]
-        : dets.reduce((best, det) => det.confidence > best.confidence ? det : best);
+    // The same detection that the preview draws in green.
+    const mainIndex = mainDetectionIndex(
+      dets,
+      image.selectedDetectionIndex,
+      new Set(image.excludedDetections ?? []),
+    );
+    if (mainIndex === null) return image;
 
     try {
       const srcImg = await loadImage(image.previewUrl);
-      const canvas = straightenedCrop(srcImg, topDet);
+      const canvas = straightenedCrop(srcImg, dets[mainIndex]);
       const blob = await canvasToBlob(canvas, "image/png");
 
       const croppedFile = new File([blob], image.filename, {
