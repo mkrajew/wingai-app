@@ -19,7 +19,7 @@ import {
 import {
   loadImage,
   loadImageDimensions,
-  mirrorImageHorizontally,
+  turnImage,
   renderTransformedImage,
   renderThumbnail,
   canvasToBlob,
@@ -37,7 +37,8 @@ import {
   orientationToApply,
 } from "./utils/wingOptions";
 import type { WingModel, WingOptions } from "./utils/wingOptions";
-import { clampToImage, mirrorLandmarks } from "./utils/landmarks";
+import { clampToImage, turnLandmarks } from "./utils/landmarks";
+import { needsRotation } from "./utils/wingPose";
 import { useT } from "./i18n";
 
 export default App;
@@ -767,38 +768,45 @@ function App() {
         signal,
       );
       let landmarks = analysis.coords;
-      if (needsMirroring(orientation, analysis.orientation)) {
-        // The picture and its landmarks are mirrored together. If that fails, the wing
-        // stays as it was with its original landmarks, never one mirrored without the other.
+      // When a side is wanted, the wings of the other handedness are mirrored and the wings that lie upside down
+      // are turned by 180 degrees (both together mirror the wing vertically).
+      const turn = {
+        mirror: needsMirroring(orientation, analysis.orientation),
+        rotate: needsRotation(orientation, analysis.coords, analysis.orientation),
+      };
+      if (turn.mirror || turn.rotate) {
+        // The picture and its landmarks are turned together. If that fails, the wing
+        // stays as it was with its original landmarks, never one turned without the other.
         try {
-          const mirrored = await mirrorImageHorizontally(
+          const turned = await turnImage(
             prepared.previewUrl,
             prepared.filename,
             prepared.file.lastModified,
+            turn,
           );
           if (
             signal.aborted ||
-            mirrored.width !== width ||
-            mirrored.height !== height
+            turned.width !== width ||
+            turned.height !== height
           ) {
-            URL.revokeObjectURL(mirrored.previewUrl);
+            URL.revokeObjectURL(turned.previewUrl);
             throw signal.aborted
               ? signal.reason
-              : new Error("The mirrored image has other dimensions.");
+              : new Error("The turned image has other dimensions.");
           }
-          madeUrls.add(mirrored.previewUrl);
+          madeUrls.add(turned.previewUrl);
           // The original previewUrl stays alive in the upload snapshot, "Edit" restores it.
           prepared = {
             ...prepared,
-            file: mirrored.file,
-            previewUrl: mirrored.previewUrl,
+            file: turned.file,
+            previewUrl: turned.previewUrl,
             thumbUrl: undefined,
           };
-          landmarks = mirrorLandmarks(analysis.coords, width);
+          landmarks = turnLandmarks(analysis.coords, width, height, turn);
         } catch (error) {
           if (signal.aborted) throw error;
           console.warn(
-            "Failed to mirror the image, keeping its orientation.",
+            "Failed to turn the image, keeping its orientation.",
             prepared.filename,
             error,
           );

@@ -33,7 +33,7 @@ WingAI runs online at **https://wingai.ii.pw.edu.pl**. It needs no installation 
 - **Batch upload.** Drop `.png` and `.jpg` photos into the page and process them together.
 - **Wing detection (optional).** A YOLO detector runs in your browser through ONNX Runtime Web. It finds each wing as a rotated box and crops it, turned so that the wing lies horizontal. A photo with several wings is split into separate images. Each image has skip, flip and rotate controls.
 - **Two landmark models.** `precise` handles wings in their original, horizontal orientation. `rotation` handles rotated and mirrored wings. A switch in the header selects the model.
-- **Orientation.** With the `rotation` model, WingAI mirrors wings of the other handedness, so a whole sample consists of left wings or of right wings.
+- **Orientation.** With the `rotation` model, WingAI mirrors wings of the other handedness, so a whole sample consists of left wings or of right wings. It also turns wings that lie upside down by 180°, so all wings end in the same pose. Keeping the original orientation changes nothing.
 - **Review flag.** The backend flags wings with a wrong number of detected points, a failed match, or a large deviation from the mean wing shape.
 - **Interactive review.** Drag any landmark, zoom, pan, rename or delete images, and move between images with the keyboard.
 - **Export.** Download a CSV with the coordinates, a ZIP of PNG images with the landmarks embedded for IdentiFly, or both.
