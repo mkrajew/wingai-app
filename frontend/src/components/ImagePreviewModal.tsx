@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { formatBytes } from "../utils";
 import type { ImageFile, Detection } from "../App";
+import { checkboxAnchor } from "../utils/obb";
 import { useT } from "../i18n";
 
 const CHECKBOX_SIZE = 14;
@@ -101,30 +102,34 @@ export default function ImagePreviewModal({
 
       for (let i = 0; i < detections.length; i++) {
         const det = detections[i];
-        const x = det.x1 * scaleX;
-        const y = det.y1 * scaleY;
-        const w = (det.x2 - det.x1) * scaleX;
-        const h = (det.y2 - det.y1) * scaleY;
         const isExcluded = excluded.has(i);
         const color = isExcluded ? "#aaaaaa" : (i === mainIndex ? "#00e676" : "#2196f3");
         const isHovered = i === hoveredIndex;
 
+        // The detection is a rotated rectangle: draw its four corners as the model returned them.
+        ctx.beginPath();
+        det.corners.forEach(([px, py], k) => {
+          if (k === 0) ctx.moveTo(px * scaleX, py * scaleY);
+          else ctx.lineTo(px * scaleX, py * scaleY);
+        });
+        ctx.closePath();
+
         if (isHovered && !isExcluded) {
           ctx.fillStyle = color + "33";
-          ctx.fillRect(x, y, w, h);
+          ctx.fill();
         }
 
         ctx.globalAlpha = isExcluded ? 0.8 : 1.0;
         ctx.setLineDash(isExcluded ? [5, 4] : []);
         ctx.strokeStyle = color;
         ctx.lineWidth = isHovered && !isExcluded ? 3 : 2;
-        ctx.strokeRect(x, y, w, h);
+        ctx.stroke();
         ctx.setLineDash([]);
         ctx.globalAlpha = 1.0;
 
-        const anchorY = y > CHECKBOX_SIZE ? y : y + h + CHECKBOX_SIZE;
-        const cbX = x;
-        const cbY = anchorY - CHECKBOX_SIZE;
+        const { cbX, cbY, anchorY } = checkboxAnchor(
+          det.corners, scaleX, scaleY, dispW, dispH, CHECKBOX_SIZE,
+        );
 
         if (showConf && !isExcluded) {
           const label = (det.confidence * 100).toFixed(1) + "%";
@@ -370,8 +375,8 @@ export default function ImagePreviewModal({
                   let foundDist = Infinity;
                   for (let i = 0; i < detections.length; i++) {
                     const det = detections[i];
-                    const cx = ((det.x1 + det.x2) / 2) * scaleX;
-                    const cy = ((det.y1 + det.y2) / 2) * scaleY;
+                    const cx = det.cx * scaleX;
+                    const cy = det.cy * scaleY;
                     const dist = (mouseX - cx) ** 2 + (mouseY - cy) ** 2;
                     if (dist < foundDist) {
                       found = i;
@@ -393,13 +398,9 @@ export default function ImagePreviewModal({
 
                   // Check checkbox clicks first
                   for (let i = 0; i < detections.length; i++) {
-                    const det = detections[i];
-                    const x = det.x1 * scaleX;
-                    const y = det.y1 * scaleY;
-                    const h = (det.y2 - det.y1) * scaleY;
-                    const anchorY = y > CHECKBOX_SIZE ? y : y + h + CHECKBOX_SIZE;
-                    const cbX = x;
-                    const cbY = anchorY - CHECKBOX_SIZE;
+                    const { cbX, cbY } = checkboxAnchor(
+                      detections[i].corners, scaleX, scaleY, canvas.width, canvas.height, CHECKBOX_SIZE,
+                    );
                     if (mouseX >= cbX && mouseX <= cbX + CHECKBOX_SIZE && mouseY >= cbY && mouseY <= cbY + CHECKBOX_SIZE) {
                       onToggleDetectionExclusion(previewIndex, i);
                       return;
@@ -411,8 +412,8 @@ export default function ImagePreviewModal({
                   let foundDist = Infinity;
                   for (let i = 0; i < detections.length; i++) {
                     const det = detections[i];
-                    const cx = ((det.x1 + det.x2) / 2) * scaleX;
-                    const cy = ((det.y1 + det.y2) / 2) * scaleY;
+                    const cx = det.cx * scaleX;
+                    const cy = det.cy * scaleY;
                     const dist = (mouseX - cx) ** 2 + (mouseY - cy) ** 2;
                     if (dist < foundDist) { found = i; foundDist = dist; }
                   }
