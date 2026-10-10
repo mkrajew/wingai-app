@@ -5,6 +5,8 @@
  * lives in one place and can be reused.
  */
 
+import type { Turn } from "./landmarks";
+
 export function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
@@ -36,12 +38,13 @@ export function canvasToBlob(
 
 export type ImageTransform =
   | { type: "flip"; axis: "horizontal" | "vertical" }
-  | { type: "rotate"; direction: "cw" | "ccw" };
+  | { type: "rotate"; direction: "cw" | "ccw" }
+  | ({ type: "turn" } & Turn);
 
 /**
- * Loads an image, applies a flip or 90° rotation on a canvas, and returns the
- * re-encoded blob together with the output dimensions. Rotation swaps the
- * dimensions (W↔H); flips leave them unchanged.
+ * Loads an image, applies a flip, a 90° rotation or a turn on a canvas, and
+ * returns the re-encoded blob together with the output dimensions. Rotation
+ * swaps the dimensions (W↔H); flips and turns leave them unchanged.
  */
 export async function renderTransformedImage(
   src: string,
@@ -57,7 +60,19 @@ export async function renderTransformedImage(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Failed to get canvas context");
 
-  if (transform.type === "flip") {
+  if (transform.type === "turn") {
+    // An exact permutation of the pixels: a matrix of whole numbers, so nothing is resampled.
+    const flipX = transform.mirror !== transform.rotate;
+    const flipY = transform.rotate;
+    ctx.setTransform(
+      flipX ? -1 : 1,
+      0,
+      0,
+      flipY ? -1 : 1,
+      flipX ? canvas.width : 0,
+      flipY ? canvas.height : 0,
+    );
+  } else if (transform.type === "flip") {
     if (transform.axis === "horizontal") {
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
@@ -79,17 +94,20 @@ export async function renderTransformedImage(
 }
 
 /**
- * A horizontally mirrored copy of an image: a PNG file with the given name, and the object URL to
- * show it from (the caller revokes it). Pixel c of the copy is pixel width - 1 - c of the image.
+ * A copy of an image that is mirrored horizontally, turned by 180 degrees, or both (mirrored
+ * vertically): a PNG file with the given name, and the object URL to show it from (the caller
+ * revokes it). The pixels only move, none of them changes: with `mirror`, pixel c of a row
+ * becomes pixel width - 1 - c, with `rotate` the rows are reversed too.
  */
-export async function mirrorImageHorizontally(
+export async function turnImage(
   src: string,
   filename: string,
-  lastModified: number = Date.now(),
+  lastModified: number,
+  turn: Turn,
 ) {
   const { blob, width, height } = await renderTransformedImage(
     src,
-    { type: "flip", axis: "horizontal" },
+    { type: "turn", ...turn },
     "image/png",
   );
   const file = new File([blob], filename, { type: "image/png", lastModified });
