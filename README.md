@@ -31,7 +31,7 @@ WingAI runs online at **https://wingai.ii.pw.edu.pl**. It needs no installation 
 ## Features
 
 - **Batch upload.** Drop `.png` and `.jpg` photos into the page and process them together.
-- **Wing detection (optional).** A YOLO detector runs in your browser through ONNX Runtime Web. It crops a wing out of a photo and splits a photo with several wings into separate images. Each image has skip, flip and rotate controls.
+- **Wing detection (optional).** A YOLO detector runs in your browser through ONNX Runtime Web. It finds each wing as a rotated box and crops it, turned so that the wing lies horizontal. A photo with several wings is split into separate images. Each image has skip, flip and rotate controls.
 - **Two landmark models.** `precise` handles wings in their original, horizontal orientation. `rotation` handles rotated and mirrored wings. A switch in the header selects the model.
 - **Orientation.** With the `rotation` model, WingAI mirrors wings of the other handedness, so a whole sample consists of left wings or of right wings.
 - **Review flag.** The backend flags wings with a wrong number of detected points, a failed match, or a large deviation from the mean wing shape.
@@ -53,7 +53,7 @@ flowchart LR
     G --> H["Export CSV<br/>or PNG with metadata"]
 ```
 
-1. The browser can detect each wing with the YOLO model and crop it. This step is optional. After the first download, the model file stays in the browser cache.
+1. The browser can detect each wing with the YOLO model and crop it, turned to horizontal. This step is optional. After the first download, the model file stays in the browser cache.
 2. The browser uploads an image to `POST /analyze`. The backend fits it into a 400 x 400 input, and a U-Net predicts one blob per landmark. The blob centres become coordinates in the original image.
 3. The blobs arrive in no fixed order. The backend aligns them to a mean wing shape with Procrustes analysis, which gives each point its landmark number.
 4. The same alignment shows whether the wing has the handedness of the mean shape (`right`) or is its mirror image (`left`). The app uses this to orient a whole sample.
@@ -92,7 +92,7 @@ The trained weights are not part of the repository, and the folders that hold th
 | `final-precise.ckpt` | `backend/models/` | `precise` landmark model |
 | `final-rotation-2.ckpt` | `backend/models/` | `rotation` landmark model |
 | `mean_shape.pth` | `backend/models/` | mean wing shape for landmark matching |
-| `detector.onnx` | `frontend/public/models/` | wing detector (optional) |
+| `best-dota.onnx` | `frontend/public/models/` | wing detector (optional) |
 
 The backend loads the three files in `backend/models/` at startup and stops with an error when one is missing. The weights come from the training pipeline in [bees](https://github.com/mkrajew/bees).
 
@@ -146,7 +146,7 @@ docker compose up -d --build
 | `frontend` | The built app, served by nginx |
 | `nginx` | Reverse proxy on ports 80 and 443. It forwards `/` to the frontend and `/api/` to the backend. |
 
-Put `detector.onnx` into `frontend/public/models/` before you build the frontend image. The build copies it into the site.
+Put `best-dota.onnx` into `frontend/public/models/` before you build the frontend image. The build copies it into the site.
 
 The included `nginx.conf` and the certificate mount (`/etc/ssl/IIPW`) belong to the wingai.ii.pw.edu.pl deployment. For another host, change `server_name`, the certificate paths and the certificate mount in `docker-compose.yml`.
 
