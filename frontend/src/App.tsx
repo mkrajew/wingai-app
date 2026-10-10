@@ -26,7 +26,9 @@ import {
 } from "./utils/image";
 import type { ImageTransform } from "./utils/image";
 import { straightenedCrop } from "./utils/obbCrop";
-import { mapWithConcurrency } from "./utils/async";
+import { mainDetectionIndex } from "./utils/mainDetection";
+import { mapWithConcurrency, runPipeline } from "./utils/async";
+import { newImageId, patchImageById } from "./utils/imageState";
 import {
   DEFAULT_WING_OPTIONS,
   chooseModel,
@@ -43,6 +45,8 @@ export default App;
 export type { Detection };
 
 export type ImageFile = {
+  // Stays the same while the name and the picture change during processing.
+  id: string;
   filename: string;
   file: File;
   previewUrl: string;
@@ -62,6 +66,18 @@ export type ImageFile = {
 
 type ThemeMode = "light" | "dark";
 
+// What the first stage of processing (the crop) hands to the second (the request to the backend).
+type PreparedImage = {
+  // The photo as it is sent to the backend.
+  image: ImageFile;
+  width: number | undefined;
+  height: number | undefined;
+  // The picture is a crop, so the screen can show it right away.
+  cropped: boolean;
+  // Set when preparing failed. The second stage then makes the error result without a request.
+  failure?: { error: unknown };
+};
+
 const UPLOAD_MAX_EDGE = 400;
 const ENABLE_UPLOAD_RESIZE = false;
 const THEME_STORAGE_KEY = "wingai-theme";
@@ -69,6 +85,11 @@ const THEME_STORAGE_KEY = "wingai-theme";
 // the backend (whose inference is effectively serialized) while overlapping
 // client-side crop/encode with in-flight requests.
 const PROCESS_CONCURRENCY = 4;
+// Photos cropped at the same time (as many as were processed at the same time before). The crop is work for the
+// browser, not for the backend, and runs ahead of the requests: a photo is shown cropped and sent as soon as it
+// is ready. With 8 photos on a fast computer: 2 at a time shows the first crop sooner (1.3 s, not 2.5 s) but takes
+// 6.5 s in all, 4 at a time takes 4.7 s.
+const PREPARE_CONCURRENCY = 4;
 // Thumbnails for the upload list: render a small downscaled image once per
 // file so the browser never decodes full-resolution photos to paint a 56px
 // preview. Bounded concurrency keeps only a few full-res decodes in flight.
@@ -104,6 +125,8 @@ function App() {
   const [isUploadResetConfirmOpen, setIsUploadResetConfirmOpen] = useState(false);
   const downloadNoticeTimeout = useRef<number | null>(null);
   const dimensionsRequestedRef = useRef(new Set<string>());
+  // The list as last rendered, for processing that runs later and has to know whether a photo is still there.
+  const latestImagesRef = useRef<ImageFile[]>([]);
   const thumbnailRequestedRef = useRef(new Set<string>());
   // Ref drives a synchronous re-entry guard (catches same-tick double clicks);
   // the state drives the spinner overlay in the preview modal.
@@ -172,6 +195,7 @@ function App() {
         if (existingKeys.has(key)) continue;
         existingKeys.add(key);
         newFiles.push({
+          id: newImageId(),
           filename: file.name,
           file: file,
           previewUrl: URL.createObjectURL(file),
@@ -439,6 +463,7 @@ function App() {
       const file = new File([blob], filename, { type: "image/png", lastModified: Date.now() });
 
       newFiles.push({
+        id: newImageId(),
         filename,
         file,
         previewUrl: URL.createObjectURL(blob),
@@ -534,8 +559,20 @@ function App() {
 
   async function normalizeJpegToPng(image: ImageFile) {
     if (!isJpegFile(image.file)) return image;
+    const nextFilename = toPngFilename(image.filename);
+    if (image.file.type === "image/png") {
+      // A crop is already a PNG but keeps the name of its photo (*.JPG), which is what isJpegFile looks
+      // at. Encoding it again would give the same pixels, so only the name changes.
+      return {
+        ...image,
+        filename: nextFilename,
+        file: new File([image.file], nextFilename, {
+          type: "image/png",
+          lastModified: image.file.lastModified,
+        }),
+      };
+    }
     try {
-      const nextFilename = toPngFilename(image.filename);
       const pngFile = await convertJpegToPng(image.file, nextFilename);
       const nextPreviewUrl = URL.createObjectURL(pngFile);
       // Note: the original previewUrl is intentionally NOT revoked here — it is
@@ -610,14 +647,17 @@ function App() {
       return image;
     }
 
-    const topDet =
-      image.selectedDetectionIndex !== undefined && dets[image.selectedDetectionIndex]
-        ? dets[image.selectedDetectionIndex]
-        : dets.reduce((best, det) => det.confidence > best.confidence ? det : best);
+    // The same detection that the preview draws in green.
+    const mainIndex = mainDetectionIndex(
+      dets,
+      image.selectedDetectionIndex,
+      new Set(image.excludedDetections ?? []),
+    );
+    if (mainIndex === null) return image;
 
     try {
       const srcImg = await loadImage(image.previewUrl);
-      const canvas = straightenedCrop(srcImg, topDet);
+      const canvas = straightenedCrop(srcImg, dets[mainIndex]);
       const blob = await canvasToBlob(canvas, "image/png");
 
       const croppedFile = new File([blob], image.filename, {
@@ -638,12 +678,162 @@ function App() {
     }
   }
 
+  // The first stage of processing: the crop (when the photo has a detection), the PNG name and the size. It is
+  // work for the browser only. A failure does not throw, the second stage turns it into the error result.
+  async function prepareImage(
+    image: ImageFile,
+    signal: AbortSignal,
+    madeUrls: Set<string>,
+  ): Promise<PreparedImage> {
+    let prepared = image;
+    let width = image.width;
+    let height = image.height;
+    let cropped = false;
+    // The object URLs made here: released when the run is aborted, otherwise the run keeps track of them.
+    const made: string[] = [];
+    try {
+      const croppedImage = await cropImageToBoundingBox(prepared);
+      if (croppedImage !== prepared) {
+        made.push(croppedImage.previewUrl);
+        prepared = croppedImage;
+        width = prepared.width;
+        height = prepared.height;
+        cropped = true;
+      }
+      if (signal.aborted) throw signal.reason;
+      const normalized = await normalizeJpegToPng(prepared);
+      if (normalized.previewUrl !== prepared.previewUrl) {
+        made.push(normalized.previewUrl);
+      }
+      prepared = normalized;
+      if (signal.aborted) throw signal.reason;
+      const hasDimensions =
+        typeof width === "number" &&
+        Number.isFinite(width) &&
+        width > 0 &&
+        typeof height === "number" &&
+        Number.isFinite(height) &&
+        height > 0;
+      if (!hasDimensions) {
+        const dimensions = await loadImageDimensions(prepared.previewUrl);
+        width = dimensions.width;
+        height = dimensions.height;
+      }
+      if (
+        typeof width !== "number" ||
+        !Number.isFinite(width) ||
+        width <= 0 ||
+        typeof height !== "number" ||
+        !Number.isFinite(height) ||
+        height <= 0
+      ) {
+        throw new Error("Invalid image dimensions.");
+      }
+      made.forEach((url) => madeUrls.add(url));
+      return { image: prepared, width, height, cropped };
+    } catch (error) {
+      if (signal.aborted) {
+        made.forEach((url) => URL.revokeObjectURL(url));
+        throw error;
+      }
+      made.forEach((url) => madeUrls.add(url));
+      return { image: prepared, width, height, cropped, failure: { error } };
+    }
+  }
+
+  // The second stage of processing: the request to the backend and, when the wing lies on the other side, the
+  // mirror image. It makes the final state of the photo, an error one when something failed.
+  async function analyzePrepared(
+    preparedImage: PreparedImage,
+    image: ImageFile,
+    model: WingModel,
+    orientation: ReturnType<typeof orientationToApply>,
+    signal: AbortSignal,
+    madeUrls: Set<string>,
+  ): Promise<ImageFile> {
+    let prepared = preparedImage.image;
+    const { width, height } = preparedImage;
+    try {
+      if (preparedImage.failure) throw preparedImage.failure.error;
+      if (width === undefined || height === undefined) {
+        throw new Error("Invalid image dimensions.");
+      }
+
+      const analysis = await analyzeImageWithBackend(
+        prepared,
+        width,
+        height,
+        model,
+        signal,
+      );
+      let landmarks = analysis.coords;
+      if (needsMirroring(orientation, analysis.orientation)) {
+        // The picture and its landmarks are mirrored together. If that fails, the wing
+        // stays as it was with its original landmarks, never one mirrored without the other.
+        try {
+          const mirrored = await mirrorImageHorizontally(
+            prepared.previewUrl,
+            prepared.filename,
+            prepared.file.lastModified,
+          );
+          if (
+            signal.aborted ||
+            mirrored.width !== width ||
+            mirrored.height !== height
+          ) {
+            URL.revokeObjectURL(mirrored.previewUrl);
+            throw signal.aborted
+              ? signal.reason
+              : new Error("The mirrored image has other dimensions.");
+          }
+          madeUrls.add(mirrored.previewUrl);
+          // The original previewUrl stays alive in the upload snapshot, "Edit" restores it.
+          prepared = {
+            ...prepared,
+            file: mirrored.file,
+            previewUrl: mirrored.previewUrl,
+            thumbUrl: undefined,
+          };
+          landmarks = mirrorLandmarks(analysis.coords, width);
+        } catch (error) {
+          if (signal.aborted) throw error;
+          console.warn(
+            "Failed to mirror the image, keeping its orientation.",
+            prepared.filename,
+            error,
+          );
+        }
+      }
+      return {
+        ...prepared,
+        filename: toDwPngFilename(prepared.filename),
+        vector: landmarks,
+        check: analysis.check,
+        status: "done",
+        width,
+        height,
+      };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      const message = error instanceof Error ? error.message : "Unknown error";
+      console.error("Backend analysis failed.", image.filename, error);
+      return {
+        ...prepared,
+        status: "error",
+        error: message,
+        width,
+        height,
+      };
+    }
+  }
+
+  // Crops and analyses the photos in two stages that run at the same time, and updates each photo on the
+  // screen as soon as its crop and then its result are ready.
   async function processImagesWithBackend(
     images: ImageFile[],
     options: WingOptions,
-    existing: ImageFile[] = [],
   ) {
-    if (images.length === 0) return [];
+    if (images.length === 0) return;
 
     const { model } = options;
     const orientation = orientationToApply(options);
@@ -651,133 +841,88 @@ function App() {
     processingAbortRef.current = abortController;
     const { signal } = abortController;
 
+    // The object URLs made by this run, to release those of a photo that was deleted meanwhile.
+    const madeUrls = new Set<string>();
+    // The name of each photo before the pass that makes the names unique.
+    const wantedNames = new Map<string, string>();
+
+    // Updates one photo. It may be gone by now (deleted while processing): then its pictures are released.
+    const update = (
+      id: string,
+      changes: Partial<ImageFile>,
+      uniqueName = false,
+    ) => {
+      if (signal.aborted) return;
+      if (!latestImagesRef.current.some((file) => file.id === id)) {
+        if (changes.previewUrl && madeUrls.has(changes.previewUrl)) {
+          URL.revokeObjectURL(changes.previewUrl);
+        }
+        return;
+      }
+      setImageFiles((prev) => {
+        const index = prev.findIndex((file) => file.id === id);
+        if (index < 0) return prev;
+        const patch =
+          uniqueName && changes.filename !== undefined
+            ? {
+                ...changes,
+                filename: ensureUniqueFilename(changes.filename, index, prev),
+              }
+            : changes;
+        return patchImageById(prev, id, patch);
+      });
+    };
+
     setProcessing({ inProgress: true, completed: 0, total: images.length });
 
     try {
-      const processed = await mapWithConcurrency(
-        images,
-        PROCESS_CONCURRENCY,
-        async (image): Promise<ImageFile> => {
-          let prepared = image;
-          let width = image.width;
-          let height = image.height;
-          try {
-            const cropped = await cropImageToBoundingBox(prepared);
-            if (cropped !== prepared) {
-              prepared = cropped;
-              width = prepared.width;
-              height = prepared.height;
-            }
-            prepared = await normalizeJpegToPng(prepared);
-            const hasDimensions =
-              typeof width === "number" &&
-              Number.isFinite(width) &&
-              width > 0 &&
-              typeof height === "number" &&
-              Number.isFinite(height) &&
-              height > 0;
-            if (!hasDimensions) {
-              const dimensions = await loadImageDimensions(prepared.previewUrl);
-              width = dimensions.width;
-              height = dimensions.height;
-            }
-            if (
-              typeof width !== "number" ||
-              !Number.isFinite(width) ||
-              width <= 0 ||
-              typeof height !== "number" ||
-              !Number.isFinite(height) ||
-              height <= 0
-            ) {
-              throw new Error("Invalid image dimensions.");
-            }
-
-            const analysis = await analyzeImageWithBackend(
-              prepared,
-              width,
-              height,
-              model,
-              signal,
-            );
-            let landmarks = analysis.coords;
-            if (needsMirroring(orientation, analysis.orientation)) {
-              // The picture and its landmarks are mirrored together. If that fails, the wing
-              // stays as it was with its original landmarks, never one mirrored without the other.
-              try {
-                const mirrored = await mirrorImageHorizontally(
-                  prepared.previewUrl,
-                  prepared.filename,
-                  prepared.file.lastModified,
-                );
-                if (
-                  signal.aborted ||
-                  mirrored.width !== width ||
-                  mirrored.height !== height
-                ) {
-                  URL.revokeObjectURL(mirrored.previewUrl);
-                  throw signal.aborted
-                    ? signal.reason
-                    : new Error("The mirrored image has other dimensions.");
-                }
-                // The original previewUrl stays alive in the upload snapshot, "Edit" restores it.
-                prepared = {
-                  ...prepared,
-                  file: mirrored.file,
-                  previewUrl: mirrored.previewUrl,
-                  thumbUrl: undefined,
-                };
-                landmarks = mirrorLandmarks(analysis.coords, width);
-              } catch (error) {
-                if (signal.aborted) throw error;
-                console.warn(
-                  "Failed to mirror the image, keeping its orientation.",
-                  prepared.filename,
-                  error,
-                );
-              }
-            }
-            return {
-              ...prepared,
-              filename: toDwPngFilename(prepared.filename),
-              vector: landmarks,
-              check: analysis.check,
-              status: "done",
-              width,
-              height,
-            };
-          } catch (error) {
-            if (signal.aborted) throw error;
-            const message =
-              error instanceof Error ? error.message : "Unknown error";
-            console.error("Backend analysis failed.", image.filename, error);
-            return {
-              ...prepared,
-              status: "error",
-              error: message,
-              width,
-              height,
-            };
-          } finally {
-            if (!signal.aborted) {
-              setProcessing((prev) => ({
-                ...prev,
-                completed: Math.min(prev.total, prev.completed + 1),
-              }));
-            }
-          }
+      await runPipeline(images, {
+        prepareLimit: PREPARE_CONCURRENCY,
+        analyzeLimit: PROCESS_CONCURRENCY,
+        signal,
+        prepare: (image) => prepareImage(image, signal, madeUrls),
+        onPrepared: (prepared, image) => {
+          // Show the crop now, while the backend is still busy with the photos before it.
+          if (!prepared.cropped) return;
+          update(image.id, {
+            file: prepared.image.file,
+            previewUrl: prepared.image.previewUrl,
+            width: prepared.width,
+            height: prepared.height,
+          });
         },
-      );
+        analyze: (prepared, image) =>
+          analyzePrepared(prepared, image, model, orientation, signal, madeUrls),
+        onAnalyzed: (result, image) => {
+          wantedNames.set(image.id, result.filename);
+          update(image.id, result, true);
+          setProcessing((prev) => ({
+            ...prev,
+            completed: Math.min(prev.total, prev.completed + 1),
+          }));
+        },
+      });
 
-      const used = new Set(existing.map((file) => file.filename.toLowerCase()));
-      return processed.map((file) => {
-        const uniqueName = ensureUniqueFilenameFromSet(file.filename, used);
-        return uniqueName === file.filename
-          ? file
-          : { ...file, filename: uniqueName };
+      // Photos that ended up with the same name get (2), (3)... in the order of the list, whichever
+      // of them was ready first.
+      setImageFiles((prev) => {
+        const used = new Set<string>();
+        let changed = false;
+        const next = prev.map((file) => {
+          const wanted = wantedNames.get(file.id);
+          if (wanted === undefined) return file;
+          const name = ensureUniqueFilenameFromSet(wanted, used);
+          if (name === file.filename) return file;
+          changed = true;
+          return { ...file, filename: name };
+        });
+        return changed ? next : prev;
       });
     } finally {
-      processingAbortRef.current = null;
-      setProcessing((prev) => ({ ...prev, inProgress: false }));
+      if (processingAbortRef.current === abortController) {
+        processingAbortRef.current = null;
+        setProcessing((prev) => ({ ...prev, inProgress: false }));
+      }
     }
   }
 
@@ -792,8 +937,7 @@ function App() {
     setReviewIndex(0);
 
     try {
-      const processed = await processImagesWithBackend(toProcess, wingOptions);
-      setImageFiles(processed);
+      await processImagesWithBackend(toProcess, wingOptions);
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         throw error;
@@ -827,6 +971,10 @@ function App() {
     setEditConfirmTrigger(0);
     setResetConfirmTrigger(0);
   }
+
+  useEffect(() => {
+    latestImagesRef.current = imageFiles;
+  }, [imageFiles]);
 
   useEffect(() => {
     // Each previewUrl is considered exactly once. After the first pass every

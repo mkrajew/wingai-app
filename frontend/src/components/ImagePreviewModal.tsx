@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { formatBytes } from "../utils";
 import type { ImageFile, Detection } from "../App";
+import { mainDetectionIndex } from "../utils/mainDetection";
 import { inCheckbox, tagFrame } from "../utils/obb";
 import { useT } from "../i18n";
 
@@ -88,14 +89,8 @@ export default function ImagePreviewModal({
 
       ctx.clearRect(0, 0, dispW, dispH);
 
-      const includedIndices = detections.map((_, i) => i).filter(i => !excluded.has(i));
-      if (includedIndices.length === 0) return;
-
-      const topIndex = includedIndices.reduce((best, i) =>
-        detections[i].confidence > detections[best].confidence ? i : best,
-        includedIndices[0],
-      );
-      const mainIndex = selectedIndex !== null && !excluded.has(selectedIndex) ? selectedIndex : topIndex;
+      const mainIndex = mainDetectionIndex(detections, selectedIndex, excluded);
+      if (mainIndex === null) return;
 
       ctx.font = "bold 12px sans-serif";
       ctx.textBaseline = "bottom";
