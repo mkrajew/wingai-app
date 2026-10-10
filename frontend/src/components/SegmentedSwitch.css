@@ -1,0 +1,95 @@
+/* Pill-shaped segmented switch: an amber thumb slides behind icon-only radio
+   segments. Colours come from the Bootstrap theme variables, so it follows
+   data-bs-theme (light / dark) like the rest of the header. */
+
+.seg-switch-field {
+  position: relative;
+}
+
+/* Floats above the pill without adding to the field's height, so the other
+   header controls stay vertically centred on the pill itself. */
+.seg-switch-label {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 0.2rem;
+  padding-left: 0.9rem;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--bs-secondary-color);
+}
+
+.seg-switch {
+  --seg: 3.4rem;
+  --h: 2.75rem;
+  --icon: 28px;
+  --pad: 4px;
+  --i: 0;
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: var(--seg);
+  padding: var(--pad);
+  border-radius: 999px;
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+}
+
+.seg-switch-thumb {
+  position: absolute;
+  top: var(--pad);
+  left: var(--pad);
+  width: var(--seg);
+  height: var(--h);
+  border-radius: 999px;
+  background: var(--bs-primary);
+  transform: translateX(calc(var(--i) * var(--seg)));
+  transition: transform 0.42s cubic-bezier(0.3, 1.35, 0.45, 1);
+}
+
+.seg-switch-seg {
+  position: relative;
+  z-index: 1;
+  height: var(--h);
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--bs-secondary-color);
+  cursor: pointer;
+  transition: color 0.25s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .seg-switch-seg:hover {
+    color: var(--bs-body-color);
+  }
+}
+
+/* Dark ink on amber, same pairing as .btn-primary in index.css */
+.seg-switch-seg[aria-checked="true"] {
+  color: #111111;
+}
+
+.seg-switch-seg:focus-visible {
+  outline: 2px solid var(--bs-body-color);
+  outline-offset: 2px;
+}
+
+.seg-switch-seg svg {
+  width: var(--icon);
+  height: var(--icon);
+  display: block;
+  overflow: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seg-switch-thumb {
+    transition: none;
+  }
+}

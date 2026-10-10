@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { useT } from "../i18n";
+import { MODEL_URL, CACHE_NAME } from "../utils/modelCache";
 import {
   Download,
   ChevronDown,
@@ -14,9 +16,6 @@ type ModelStatus =
   | { phase: "ready" }
   | { phase: "error"; message: string };
 
-const MODEL_URL = "/models/detector.onnx";
-const CACHE_NAME = "wingai-models-v1";
-
 async function isModelCached(): Promise<boolean> {
   if (!("caches" in window)) return false;
   try {
@@ -29,6 +28,7 @@ async function isModelCached(): Promise<boolean> {
 }
 
 export default function DetectionModelPanel() {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [modelStatus, setModelStatus] = useState<ModelStatus>({
     phase: "checking",
@@ -107,16 +107,16 @@ export default function DetectionModelPanel() {
     modelStatus.phase === "ready" ? (
       <span
         className="badge bg-success ms-1"
-        style={{ fontSize: "0.6rem", verticalAlign: "middle" }}
+        style={{ fontSize: "0.6rem", alignSelf: "center", marginTop: "2px" }}
       >
-        Ready
+        {t.statusReady}
       </span>
     ) : modelStatus.phase === "loading" ? (
       <span
         className="badge bg-warning text-dark ms-1"
-        style={{ fontSize: "0.6rem", verticalAlign: "middle" }}
+        style={{ fontSize: "0.6rem", alignSelf: "center", marginTop: "2px" }}
       >
-        Loading
+        {t.statusLoading}
       </span>
     ) : null;
 
@@ -128,7 +128,7 @@ export default function DetectionModelPanel() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
-        <span>Detection model</span>
+        <span>{t.detectionModel}</span>
         {statusBadge}
         {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
       </button>
@@ -138,7 +138,7 @@ export default function DetectionModelPanel() {
           className="position-absolute end-0 mt-1 border rounded shadow-sm bg-body p-3"
           style={{ minWidth: 260, zIndex: 20 }}
         >
-          <p className="small fw-semibold mb-2 text-body">Detection model</p>
+          <p className="small fw-semibold mb-2 text-body">{t.detectionModel}</p>
 
           {modelStatus.phase === "checking" && (
             <div className="text-muted small d-flex align-items-center gap-2">
@@ -147,7 +147,7 @@ export default function DetectionModelPanel() {
                 role="status"
                 aria-hidden="true"
               />
-              Checking...
+              {t.checking}
             </div>
           )}
 
@@ -158,14 +158,14 @@ export default function DetectionModelPanel() {
               onClick={loadModel}
             >
               <Download size={14} />
-              Load model
+              {t.loadModel}
             </button>
           )}
 
           {modelStatus.phase === "loading" && (
             <div>
               <div className="d-flex justify-content-between small text-muted mb-1">
-                <span>Loading model...</span>
+                <span>{t.loadingModel}</span>
                 {modelStatus.progress !== null && (
                   <span>{modelStatus.progress}%</span>
                 )}
@@ -193,14 +193,14 @@ export default function DetectionModelPanel() {
             <div className="d-flex flex-column gap-2">
               <div className="alert alert-success py-2 px-3 mb-0 small d-flex align-items-center gap-2">
                 <CheckCircle size={14} />
-                <span>Model loaded and ready</span>
+                <span>{t.modelReady}</span>
               </div>
               <button
                 type="button"
                 className="btn btn-sm btn-outline-secondary"
                 onClick={loadModel}
               >
-                Reload model
+                {t.reloadModel}
               </button>
             </div>
           )}
@@ -216,7 +216,7 @@ export default function DetectionModelPanel() {
                 className="btn btn-sm btn-outline-secondary"
                 onClick={() => setModelStatus({ phase: "not_loaded" })}
               >
-                Try again
+                {t.tryAgain}
               </button>
             </div>
           )}

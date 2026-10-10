@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addPngTextChunk, createZipBlob } from "../utils";
 import type { ImageFile } from "../App";
+import { useT } from "../i18n";
+import {
+  buildLandmarksMetadata,
+  csvCoordinates,
+  fromSvg,
+  toSvg,
+} from "../utils/landmarks";
+import ConfirmDialog from "./ConfirmDialog";
 
 type ReviewImagesProps = {
   images: ImageFile[];
@@ -16,12 +24,28 @@ type ReviewImagesProps = {
   ) => void;
   onRename: (imageIndex: number, newName: string) => void;
   onRemove: (filename: string) => void;
-  onAddFiles: (files: File[]) => void;
+  onBackToEdit: () => void;
   onReset: () => void;
   onDownloadNotice: () => void;
+  editConfirmTrigger: number;
+  resetConfirmTrigger: number;
 };
 
-export default function ReviewImages({
+export default function ReviewImages(props: ReviewImagesProps) {
+  const t = useT();
+  const image = props.images[props.index];
+  if (!image) {
+    return <div className="text-muted">{t.noImagesToReview}</div>;
+  }
+  return <ReviewImagesContent {...props} image={image} />;
+}
+
+type ReviewImagesContentProps = ReviewImagesProps & { image: ImageFile };
+
+// All the hooks live here and this part is only rendered while there is an image, so they run in the
+// same order on every render (an early return in front of them would skip some).
+function ReviewImagesContent({
+  image,
   images,
   index,
   isProcessing,
@@ -30,16 +54,17 @@ export default function ReviewImages({
   onUpdatePoint,
   onRename,
   onRemove,
-  onAddFiles,
+  onBackToEdit,
   onReset,
   onDownloadNotice,
-}: ReviewImagesProps) {
-  const image = images[index];
+  editConfirmTrigger,
+  resetConfirmTrigger,
+}: ReviewImagesContentProps) {
+  const t = useT();
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const activeItemRef = useRef<HTMLButtonElement | null>(null);
   const zoomInputRef = useRef<HTMLInputElement | null>(null);
   const [svgScale, setSvgScale] = useState(1);
@@ -47,6 +72,8 @@ export default function ReviewImages({
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
+  const [isEditConfirmOpen, setIsEditConfirmOpen] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [exportMetadata, setExportMetadata] = useState(true);
   const [exportCsv, setExportCsv] = useState(false);
   const disableActions = isProcessing;
@@ -81,6 +108,12 @@ export default function ReviewImages({
     return result;
   }, [image]);
 
+  // Where each landmark is drawn: the centre of its pixel.
+  const svgPoints = useMemo(
+    () => points.map((point) => ({ x: toSvg(point.x), y: toSvg(point.y) })),
+    [points],
+  );
+
   const checkIndices = useMemo(() => {
     return images.reduce<number[]>((acc, item, idx) => {
       if (item.check) acc.push(idx);
@@ -102,10 +135,6 @@ export default function ReviewImages({
     const nextPos = (currentPos + 1) % checkIndices.length;
     onIndexChange(checkIndices[nextPos]);
   };
-
-  if (!image) {
-    return <div className="text-muted">No images to review.</div>;
-  }
 
   const viewWidth = image.width ?? 0;
   const viewHeight = image.height ?? 0;
@@ -149,6 +178,16 @@ export default function ReviewImages({
     if (!image?.check) return;
     onClearCheck(index);
   }, [image?.check, index, onClearCheck]);
+
+  useEffect(() => {
+    if (editConfirmTrigger === 0) return;
+    setIsEditConfirmOpen(true);
+  }, [editConfirmTrigger]);
+
+  useEffect(() => {
+    if (resetConfirmTrigger === 0) return;
+    setIsResetConfirmOpen(true);
+  }, [resetConfirmTrigger]);
 
   useEffect(() => {
     setZoom(1);
@@ -286,19 +325,6 @@ export default function ReviewImages({
     downloadBlob(filename, new Blob([content], { type }));
   };
 
-  const buildLandmarksMetadata = (img: ImageFile) => {
-    const vector = img.vector ?? [];
-    const values: number[] = [];
-    for (let i = 0; i < vector.length; i += 2) {
-      const rawX = vector[i];
-      const rawY = vector[i + 1];
-      const x = Number.isFinite(rawX) ? Math.trunc(rawX) : 0;
-      const y = Number.isFinite(rawY) ? Math.trunc(rawY) : 0;
-      values.push(x, y);
-    }
-    return `landmarks:${values.join(" ")};`;
-  };
-
   const buildCsv = () => {
     const csvEscape = (value: string) => `"${value.replace(/"/g, '""')}"`;
     const interleavedHeaders = ["file"];
@@ -307,23 +333,11 @@ export default function ReviewImages({
     }
     const rows: string[] = [interleavedHeaders.map(csvEscape).join(",")];
     images.forEach((img) => {
-      const vector = img.vector ?? [];
       const ySize =
         typeof img.height === "number" && Number.isFinite(img.height)
           ? img.height
           : null;
-      const values: string[] = [img.filename];
-      for (let i = 0; i < 19; i += 1) {
-        const x = vector[i * 2];
-        const y = vector[i * 2 + 1];
-        values.push(Number.isFinite(x) ? x.toString() : "");
-        if (!Number.isFinite(y)) {
-          values.push("");
-          continue;
-        }
-        const flippedY = ySize !== null && ySize > 0 ? ySize - y - 2 : y;
-        values.push(flippedY.toString());
-      }
+      const values = [img.filename, ...csvCoordinates(img.vector ?? [], ySize)];
       rows.push(values.map((value) => csvEscape(value)).join(","));
     });
     return rows.join("\n");
@@ -344,7 +358,7 @@ export default function ReviewImages({
             data: addPngTextChunk(
               new Uint8Array(await img.file.arrayBuffer()),
               "IdentiFly",
-              buildLandmarksMetadata(img),
+              buildLandmarksMetadata(img.vector ?? []),
             ),
             lastModified: img.file.lastModified,
           })),
@@ -380,15 +394,14 @@ export default function ReviewImages({
             }}
           >
             <div className="fw-semibold small">
-              Please check images:{" "}
-              {checkIndices.map((idx) => idx + 1).join(", ")}
+              {t.pleaseCheckImages(checkIndices.map((idx) => idx + 1).join(", "))}
             </div>
             <button
               type="button"
               className="btn btn-outline-danger btn-sm"
               onClick={handleNextCheck}
             >
-              Next
+              {t.next}
             </button>
           </div>
         </div>
@@ -396,7 +409,7 @@ export default function ReviewImages({
       <div className="d-flex align-items-center w-100 gap-3">
         <div className="d-flex align-items-center justify-content-between flex-grow-1">
           <h3 className="mb-0">
-            Image {index + 1} of {images.length}
+            {t.imageOf(index + 1, images.length)}
           </h3>
           <div className="d-flex align-items-center gap-2">
             <button
@@ -405,48 +418,34 @@ export default function ReviewImages({
               onClick={() => setIsGenerateOpen(true)}
               disabled={disableActions}
             >
-              Generate data
+              {t.generateData}
             </button>
             <button
               type="button"
               className="btn btn-outline-secondary btn-sm"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setIsEditConfirmOpen(true)}
               disabled={disableActions}
             >
-              Add files
+              {t.edit}
             </button>
             <button
               type="button"
               className="btn btn-outline-secondary btn-sm"
-              onClick={onReset}
+              onClick={() => setIsResetConfirmOpen(true)}
             >
-              Reset
+              {t.reset}
             </button>
             <button
               type="button"
               className="btn btn-outline-danger btn-sm"
               onClick={handleDelete}
             >
-              Delete
+              {t.delete}
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg"
-              multiple
-              onChange={(event) => {
-                if (disableActions) return;
-                const selected = Array.from(event.currentTarget.files ?? []);
-                if (selected.length > 0) onAddFiles(selected);
-                event.currentTarget.value = "";
-              }}
-              disabled={disableActions}
-              style={{ display: "none" }}
-            />
           </div>
         </div>
         <h3 className="mb-0" style={{ width: "240px" }}>
-          Files
+          {t.files}
         </h3>
       </div>
 
@@ -488,7 +487,7 @@ export default function ReviewImages({
                   if (dragIndex !== null) {
                     const pos = toSvgPoint(event);
                     if (!pos) return;
-                    onUpdatePoint(index, dragIndex, pos.x, pos.y);
+                    onUpdatePoint(index, dragIndex, fromSvg(pos.x), fromSvg(pos.y));
                     return;
                   }
                   if (!isPanning) return;
@@ -537,7 +536,7 @@ export default function ReviewImages({
                   preserveAspectRatio="xMidYMid meet"
                 />
                 {hasVector &&
-                  points.map((point, idx) => (
+                  svgPoints.map((point, idx) => (
                     <g key={`pt-${idx}`}>
                       <circle
                         cx={point.x}
@@ -556,7 +555,7 @@ export default function ReviewImages({
                           setDragIndex(idx);
                           const pos = toSvgPoint(event);
                           if (!pos) return;
-                          onUpdatePoint(index, idx, pos.x, pos.y);
+                          onUpdatePoint(index, idx, fromSvg(pos.x), fromSvg(pos.y));
                         }}
                         style={{ cursor: "grab" }}
                       />
@@ -598,7 +597,7 @@ export default function ReviewImages({
                   ))}
               </svg>
             ) : (
-              <div className="text-muted p-3">Loading image...</div>
+              <div className="text-muted p-3">{t.loadingImage}</div>
             )}
           </div>
           <div className="d-flex align-items-center gap-3 w-100">
@@ -625,7 +624,7 @@ export default function ReviewImages({
               disabled={index <= 0}
               onClick={() => onIndexChange(Math.max(0, index - 1))}
             >
-              Previous
+              {t.previous}
             </button>
             <input
               type="text"
@@ -649,25 +648,25 @@ export default function ReviewImages({
                 onIndexChange(Math.min(images.length - 1, index + 1))
               }
             >
-              Next
+              {t.next}
             </button>
           </div>
           <div className="text-muted small">
             {viewWidth > 0 && viewHeight > 0
-              ? `${viewWidth}×${viewHeight}px`
-              : "Dimensions: ..."}
+              ? t.dimensionsPx(viewWidth, viewHeight)
+              : t.dimensionsLoading}
           </div>
 
           {!hasVector && !image.error && (
-            <div className="text-muted">Processing points...</div>
+            <div className="text-muted">{t.processingPoints}</div>
           )}
           {image.error && (
-            <div className="text-danger small">Error: {image.error}</div>
+            <div className="text-danger small">{t.errorMsg(image.error)}</div>
           )}
 
           {hasVector && (
             <div className="w-100">
-              <div className="fw-semibold mb-2">Points</div>
+              <div className="fw-semibold mb-2">{t.points}</div>
               <div className="table-responsive">
                 <table className="table table-sm table-striped align-middle mb-0">
                   <thead>
@@ -766,7 +765,7 @@ export default function ReviewImages({
         >
           <div
             role="dialog"
-            aria-label="Generate data"
+            aria-label={t.generateData}
             onClick={(event) => event.stopPropagation()}
             style={{
               width: "min(90vw, 420px)",
@@ -781,11 +780,11 @@ export default function ReviewImages({
             }}
           >
             <div className="d-flex align-items-center justify-content-between">
-              <h4 className="mb-0">Generate data</h4>
+              <h4 className="mb-0">{t.generateData}</h4>
               <button
                 type="button"
                 className="btn btn-close"
-                aria-label="Close"
+                aria-label={t.close}
                 onClick={() => setIsGenerateOpen(false)}
               />
             </div>
@@ -799,7 +798,7 @@ export default function ReviewImages({
                     handleToggleMetadata(event.currentTarget.checked)
                   }
                 />
-                <span className="form-check-label">Image metadata</span>
+                <span className="form-check-label">{t.imageMetadata}</span>
               </label>
               <label className="form-check d-flex align-items-center gap-2">
                 <input
@@ -810,11 +809,11 @@ export default function ReviewImages({
                     handleToggleCsv(event.currentTarget.checked)
                   }
                 />
-                <span className="form-check-label">CSV</span>
+                <span className="form-check-label">{t.csv}</span>
               </label>
               {!exportMetadata && !exportCsv && (
                 <div className="text-danger small">
-                  Select at least one option.
+                  {t.selectAtLeastOne}
                 </div>
               )}
             </div>
@@ -824,7 +823,7 @@ export default function ReviewImages({
                 className="btn btn-outline-secondary"
                 onClick={() => setIsGenerateOpen(false)}
               >
-                Cancel
+                {t.cancel}
               </button>
               <button
                 type="button"
@@ -832,11 +831,41 @@ export default function ReviewImages({
                 onClick={() => void handleDownload()}
                 disabled={disableActions || (!exportMetadata && !exportCsv)}
               >
-                Download
+                {t.download}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {isEditConfirmOpen && (
+        <ConfirmDialog
+          title={t.backToEditTitle}
+          message={t.backToEditMessage}
+          confirmLabel={t.edit}
+          cancelLabel={t.cancel}
+          closeLabel={t.close}
+          onConfirm={() => {
+            setIsEditConfirmOpen(false);
+            onBackToEdit();
+          }}
+          onCancel={() => setIsEditConfirmOpen(false)}
+        />
+      )}
+
+      {isResetConfirmOpen && (
+        <ConfirmDialog
+          title={t.resetTitle}
+          message={t.resetMessage}
+          confirmLabel={t.reset}
+          cancelLabel={t.cancel}
+          closeLabel={t.close}
+          onConfirm={() => {
+            setIsResetConfirmOpen(false);
+            onReset();
+          }}
+          onCancel={() => setIsResetConfirmOpen(false)}
+        />
       )}
     </div>
   );

@@ -1,8 +1,8 @@
 from pathlib import Path
 
-import tqdm
 import torch
 from loguru import logger
+from tqdm import tqdm
 
 PROJ_ROOT = Path(__file__).resolve().parents[1]
 logger.info(f"PROJ_ROOT path is: {PROJ_ROOT}")
