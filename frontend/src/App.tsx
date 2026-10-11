@@ -5,6 +5,8 @@ import ConfirmDialog from "./components/ConfirmDialog";
 import DetectionModelPanel from "./components/DetectionModelPanel";
 import HelpPanel from "./components/HelpPanel";
 import LanguageSwitcher from "./components/LanguageSwitcher";
+import ThemeSwitch from "./components/ThemeSwitch";
+import type { ThemeMode } from "./components/ThemeSwitch";
 import WingOptionSwitches from "./components/WingOptionSwitches";
 import { detectFromUrl } from "./utils/yoloDetector";
 import type { Detection } from "./utils/yoloDetector";
@@ -64,8 +66,6 @@ export type ImageFile = {
   excludedDetections?: number[];
   skipProcessing?: boolean;
 };
-
-type ThemeMode = "light" | "dark";
 
 // What the first stage of processing (the crop) hands to the second (the request to the backend).
 type PreparedImage = {
@@ -1173,8 +1173,9 @@ function App() {
             </div>
           )}
           <div
-            className="d-flex flex-wrap align-items-center justify-content-end column-gap-3 row-gap-4"
-            style={{ justifySelf: "end" }}
+            className="d-flex flex-wrap align-items-center justify-content-end row-gap-4"
+            // 0.75rem keeps the header on one line down to 1200px, with the wider theme switch
+            style={{ justifySelf: "end", columnGap: "0.75rem" }}
           >
             <WingOptionSwitches
               model={wingOptions.model}
@@ -1191,22 +1192,7 @@ function App() {
             <LanguageSwitcher />
             <HelpPanel />
             <DetectionModelPanel />
-            <div className="form-check form-switch m-0">
-              <input
-                className="form-check-input"
-                type="checkbox"
-                role="switch"
-                id="theme-switch"
-                checked={theme === "dark"}
-                onChange={() =>
-                  setTheme((prev) => (prev === "dark" ? "light" : "dark"))
-                }
-                aria-label={t.darkMode}
-              />
-              <label className="form-check-label small" htmlFor="theme-switch">
-                {t.darkMode}
-              </label>
-            </div>
+            <ThemeSwitch theme={theme} onChange={setTheme} />
           </div>
         </div>
         {detection.inProgress && detection.total > 0 && (

@@ -59,7 +59,7 @@
   background-color: #ffb800;
 }
 
-/* Form switch thumb picks up primary */
+/* Checkboxes pick up the amber accent */
 .form-check-input:checked {
   background-color: #ffb800;
   border-color: #ffb800;
