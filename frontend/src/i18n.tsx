@@ -5,6 +5,8 @@ export type Lang = "EN" | "PL";
 
 export type Translations = {
   // App header / progress
+  theme: string;
+  lightMode: string;
   darkMode: string;
   orientation: string;
   orientationLeft: string;
@@ -107,6 +109,8 @@ export type Translations = {
 };
 
 const en: Translations = {
+  theme: "Theme",
+  lightMode: "Light mode",
   darkMode: "Dark mode",
   orientation: "Orientation",
   orientationLeft: "Orient all wings to the left",
@@ -267,6 +271,8 @@ const en: Translations = {
 };
 
 const pl: Translations = {
+  theme: "Motyw",
+  lightMode: "Tryb jasny",
   darkMode: "Tryb ciemny",
   orientation: "Orientacja",
   orientationLeft: "Ustaw wszystkie skrzydła w lewo",

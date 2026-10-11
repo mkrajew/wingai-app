@@ -1,0 +1,101 @@
+/* Icon motion for ThemeSwitch. `.is-playing` is set on a segment (see SegmentedSwitch) when it is
+   clicked; the icon is remounted each time, so the animations always start from the beginning. */
+
+/* view-box makes the transform-origin values below read as viewBox units */
+.theme-icon g,
+.theme-icon path {
+  transform-box: view-box;
+}
+.theme-icon circle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Light: the core of the sun rises, the halo turns into place, its four dots pop up in turn */
+.theme-icon--sun .core,
+.theme-icon--sun .halo {
+  transform-origin: 12px 12px;
+}
+.is-playing .theme-icon--sun .core {
+  animation: theme-core-rise 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+.is-playing .theme-icon--sun .halo {
+  animation: theme-halo-turn 0.9s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
+.is-playing .theme-icon--sun .halo circle {
+  animation: theme-dot-pop 0.3s cubic-bezier(0.3, 1.7, 0.5, 1) both;
+}
+.is-playing .theme-icon--sun .halo circle:nth-child(1) {
+  animation-delay: 0.28s;
+}
+.is-playing .theme-icon--sun .halo circle:nth-child(2) {
+  animation-delay: 0.36s;
+}
+.is-playing .theme-icon--sun .halo circle:nth-child(3) {
+  animation-delay: 0.44s;
+}
+.is-playing .theme-icon--sun .halo circle:nth-child(4) {
+  animation-delay: 0.52s;
+}
+@keyframes theme-core-rise {
+  from {
+    transform: scale(0.4);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes theme-halo-turn {
+  from {
+    transform: rotate(-90deg) scale(0.7);
+  }
+  to {
+    transform: rotate(0) scale(1);
+  }
+}
+@keyframes theme-dot-pop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Dark: moonrise. The edge of the button is the horizon: the moon is hidden below it, comes up on
+   an arc from the lower left, overshoots a little and settles. */
+.theme-seg-moon {
+  overflow: hidden;
+}
+/* centre of the crescent's outer circle */
+.theme-icon--moon .crescent {
+  transform-origin: 12.07px 11.93px;
+}
+.is-playing .theme-icon--moon .crescent {
+  animation: theme-moon-rise 1.1s both;
+}
+@keyframes theme-moon-rise {
+  0% {
+    transform: translate(-6px, 28px) rotate(-30deg);
+    animation-timing-function: cubic-bezier(0.2, 0.65, 0.3, 1);
+  }
+  62% {
+    transform: translate(0, -2.2px) rotate(5deg);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  }
+  82% {
+    transform: translate(0, 0.7px) rotate(-1.5deg);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+  }
+  100% {
+    transform: translate(0, 0) rotate(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-playing .theme-icon * {
+    animation: none !important;
+  }
+}

@@ -6,6 +6,8 @@ export type SegmentedOption<V extends string> = {
   value: V;
   label: string;
   icon: ReactNode;
+  // Extra class on this option's button, for styling that belongs to one icon.
+  className?: string;
 };
 
 type Props<V extends string> = {
@@ -94,7 +96,13 @@ export default function SegmentedSwitch<V extends string>({
               aria-label={option.label}
               title={option.label}
               tabIndex={checked ? 0 : -1}
-              className={run > 0 ? "seg-switch-seg is-playing" : "seg-switch-seg"}
+              className={[
+                "seg-switch-seg",
+                run > 0 && "is-playing",
+                option.className,
+              ]
+                .filter(Boolean)
+                .join(" ")}
               onClick={() => select(i)}
             >
               {/* New key = remounted icon = its CSS animation starts over */}
