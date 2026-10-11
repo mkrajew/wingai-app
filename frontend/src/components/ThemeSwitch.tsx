@@ -6,6 +6,8 @@ import "./ThemeSwitch.css";
 
 export type ThemeMode = "light" | "dark";
 
+// Geometry is the same as public/wingai-theme-*.svg. It is inlined (instead of
+// <img src>) and split into named parts so each part can be animated.
 function Icon({
   className,
   children,
@@ -30,7 +32,6 @@ function Icon({
   );
 }
 
-// The sun is split into named parts so each of them can be animated.
 function SunIcon() {
   return (
     <Icon className="theme-icon--sun">
