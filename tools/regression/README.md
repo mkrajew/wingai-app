@@ -75,6 +75,8 @@ backend/.venv/Scripts/python tools/regression/check_upright.py e2e <label> right
   It runs on its own and leaves the answer in `window.__turnCanvasResult` (see the header of the file).
 * `orient-picture.js`: does `orientPicture.ts` read the pose of real wings (six wings of the PL database in the four poses, a flat picture, a small one and a big one that
   is read from a smaller copy) and turn them to the wanted side, upright, pixel for pixel? It runs on its own like `turn-canvas.js` and leaves the answer in `window.__orientPictureResult`.
+* `parity-browser.js`: the pose reading of the app, run in the page on the pixels that a canvas gives, against what the Python reference says (`tools/pose/parity_table.py` makes the table).
+  Every twelfth saved crop by default. It runs on its own and leaves the answer in `window.__parityResult`.
 * `switches.js`: do the Orientation and Model switches of the header constrain each other as `wingOptions.ts` says (the precise model with the right orientation is allowed,
   with the left one it is not)? It clicks through a row of steps in the real page and needs no backend.
 

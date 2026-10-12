@@ -141,11 +141,48 @@ With the template that will ship (made from 7 650 complete wings of all 13 count
 * A wing tilted by 15° or more in the crop (not what YOLO gives): HOG is wrong, ink is mostly right, the agreement rule leaves 48 mistakes among 17 000 accepted decisions at TAU 0.10 and none from TAU 0.25.
 * The truth of the real sets is what the backend reads, not a human label. The number of real crops is small (274 crops, 182 main).
 
-## Decision proposed
+### 5. What the turn gives the two models of the backend (set T)
 
-* Method: `hog-16x6-b8s` as the decision, `ink-k11-p1-thirds` as the second opinion, TAU = 0.10. An unsure wing is left as it is and the backend decides, as today.
-* The answer of the backend is still checked after the request (its side and whether the wing is upside down). If it disagrees with the pixels, the old correction runs. So a wrong pixel decision costs time and a different source of the landmarks, never a wrongly oriented wing.
-* Cost in the browser (this computer, a crop of 2203 x 947): about 17 ms to shrink the crop, 6 ms ink, 1 ms HOG.
+**Set T.** 745 wings of the test split of the backend's models (the list in `bees/reports/deepwings_full_test_raw_coords.json`, so the models did not see them in training), eight countries,
+one synthetic photo each, through the real YOLO model and crop of the app. All 745 were found and are well cut: 164 `id`, 204 `rot180`, 178 `flipH`, 199 `flipV`. The pose that the app reads was right
+and sure in all 745 (smallest margin 0.314). The median crop is 689 px wide (the pictures of the databases are small), so 1 px is about 0.15% of the length of the wing.
+The backend was asked about every crop as it lies and turned the way the app turns it (`measure_precise.py`). The error of a wing is the mean distance of its 19 landmarks from the manual ones.
+
+| the wing goes to the backend | model | mean error | median | 90% | flagged by the backend |
+|---|---|---|---|---|---|
+| as it lies (what the app did so far; the wing and its landmarks were turned afterwards) | `rotation` | 1.68 px (0.236% of the length) | 1.36 px | 2.10 px | 7 (1%) |
+| as it lies (what is possible so far) | `precise` | 152.6 px (21.9%) | 157 px | 289 px | 584 (78%) |
+| turned to the right | `rotation` | 1.45 px (0.201%) | 1.16 px | 1.77 px | 3 |
+| **turned to the right** | **`precise`** | **1.12 px (0.160%)** | 1.01 px | 1.59 px | 10 |
+| turned to the left | `rotation` | 1.22 px (0.171%) | 1.09 px | 1.75 px | 3 |
+
+* **The precise model reads only a wing that lies upright on the right.** As the wings lie it is wrong and flags every wing of the other three poses (204 of 204, 178 of 178, 199 of 199), and it reads the 164 `id` wings well (0.155% of the length, 3 of them flagged).
+  After the turn to the right it is the most accurate of the lot: closer than `rotation` to the manual landmarks in 67% of the wings, by 0.33 px on average (95% interval 0.07 to 0.77 px), by 0.11 px (0.10 to 0.13) when the wings that either model flags are left out.
+  Its worst wing is 16.9 px off (`rotation` has wings 130 px off). It flags 10 wings, whose mean error is 3.2 px (the 3 wings that `rotation` flags are 61 px off), and no wing is flagged by both.
+* **For the rotation model, turning first is better than the way it was done** (it was asked about the wing as it lay and the landmarks were turned with the picture): 0.23 px better to the right and 0.46 px to the left
+  on average (95% intervals 0.006 to 0.065 and 0.030 to 0.117 points of the length), closer in 62% and 65% of the wings (the wings that needed no turn are equal). The exception is a left wing that already lies upright (`flipH`), which
+  is a little less accurate once it is mirrored to the right (0.167% to 0.215% of the length): the rotation model is most accurate on that pose.
+* **Time.** One request at a time, the backend needs 0.71 s for `rotation` and 0.70 s for `precise` (median of 40 crops); turning the wing changes nothing, the size is the same.
+
+*The truth has to be in the convention of the backend.* The browser carried the manual landmarks into the crops with the index of a pixel taken for a coordinate of the picture, where the pixel spans [x, x + 1) and its centre is x + 0.5.
+That puts a half pixel into every landmark, turned with the photo: up to 1.4 px, in a direction that depends on the pose of the crop. Measured against them, the rotation model looked worse on turned wings, which was not so.
+`measure_precise.py` (`index_landmarks`) moves the landmarks to the pixel indices of the backend. After it the mean signed error of a wing turned to the right is the same whichever pose the crop had:
+`rotation` (-0.5, +0.5) px, `precise` (+0.15, -0.35) px, the offsets of the models themselves.
+This is a test on wings of the databases put on a canvas like a photo, not on real photos (which have no manual landmarks), and it says nothing about wings that the pose reading is not sure about.
+
+## Decision taken (what the app does)
+
+The proposal of this report was HOG with the ink method as the second opinion. The app uses **HOG alone** (`hog-16x6-b8s`, a margin of at least 0.10 is "sure"): after the
+detector the two never disagreed, so the second one adds code and no decisions. Its weak spot, a picture that is tilted by 15° or more, is not what the detector gives.
+
+* **Every picture is read**, the crops of the detector and the pictures that were not cropped (a wing that is already cut, a photo without a detection). When the reading is
+  sure, the picture is turned to the chosen side, upright, before it is sent. When it is not sure, or cannot be read, or anything fails, the picture is left as it is.
+  "Keep original orientation" runs none of this.
+* **The rotation model** still has its answer checked afterwards (the side and whether the wing is upside down), as a safety net: a wing that is turned after all is logged as a
+  disagreement. **The precise model** (offered with the right orientation) has no correction afterwards, and every wing goes to it, whatever the reading says.
+* Cost in the browser (this computer, a crop of 2203 x 947): about 21 to 27 ms for the whole reading, 59 ms for a crop of 4000 x 1700.
+* The TypeScript of the app gives the same working picture, mask and descriptor as the Python reference byte for byte on all 5 221 crops saved from the app (`check_ts_parity.mjs`, in Node),
+  and on every twelfth of them in the browser, where the picture comes from a canvas (`tools/regression/parity-browser.js`); `frontend/tests` has the vectors.
 
 ## Reproduce
 

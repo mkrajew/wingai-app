@@ -4,7 +4,10 @@ Truth: the manual landmarks, carried into the frame of the crop by the browser, 
 chirality and angle -> one of the four poses. A crop is "complete" when all 19 landmarks lie inside it, at least MARGIN of its size from the border.
 
     python tools/pose/import_bprime.py      -> work/bprime/crops.npz (+ the png files for the galleries in work/bprime/png/)
+    python tools/pose/import_bprime.py --prefix bt --out bprime_test      the same for set T (make_test_items.py): work/inbox/collected-bt-*.json -> work/bprime_test
+The landmarks carried into the crop (y down) are kept in meta.json, for measure_precise.py.
 """
+import argparse
 import base64
 import json
 
@@ -19,10 +22,14 @@ MARGIN = 0.015
 
 
 def main():
-    out = WORK / "bprime"
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--prefix", default="bp", help="the posted batches are work/inbox/collected-<prefix>-*.json")
+    ap.add_argument("--out", default="bprime", help="the folder in work/ that gets the crops")
+    a = ap.parse_args()
+    out = WORK / a.out
     (out / "png").mkdir(parents=True, exist_ok=True)
     recs = []
-    for p in sorted((WORK / "inbox").glob("collected-bp-*.json")):
+    for p in sorted((WORK / "inbox").glob(f"collected-{a.prefix}-*.json")):
         recs += json.loads(p.read_text(encoding="utf-8"))
     print(f"{len(recs)} records")
     g, valid, meta = [], [], []
@@ -46,7 +53,7 @@ def main():
         meta.append({"id": r["id"], "cc": r["cc"], "name": r["name"], "mirror": r["mirror"], "theta": r["theta"], "detected": True, "conf": r["det"]["conf"],
                      "ndet": r["ndet"], "others": r["others"], "crop": r["crop"], "complete": bool(inside.all()), "points_inside": int(inside.sum()),
                      "det": det, "angle": angle, "sure": labels.sure(angle), "pose": labels.pose_name(det, angle) if labels.sure(angle) else None,
-                     "axis_angle": r["axisAngle"]})
+                     "axis_angle": r["axisAngle"], "landmarks": r["landmarks"], "scale": r.get("scale")})
         g.append(shrink(gray))
         valid.append(valid_mask(gray))
     np.savez_compressed(out / "crops.npz", g=np.stack(g), valid=np.stack(valid))

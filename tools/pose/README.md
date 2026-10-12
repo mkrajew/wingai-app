@@ -39,6 +39,7 @@ Not in this repository. Set the folder with `BEES_DATA` (default `~/projects/bee
 | **C** | perturbed wings of set B (tilt, framing, light, JPEG, blur, noise, a part outside the photo, dirt) | exact |
 | **B'** | wings of the holdout fold of set B put on a bigger canvas like a photo (mirrored or not, turned, scaled) and sent through the **real YOLO model and crop of the app**; only well cut crops count (all 19 landmarks inside) | exact (the manual landmarks carried into the crop) |
 | **A2'** | the small Pulawy wings the same way (through YOLO, in all four poses) | the backend |
+| **T** | wings of the **test split of the backend's models** (`bees/reports/deepwings_full_test_raw_coords.json`), one synthetic photo each, through the real YOLO and crop; for `measure_precise.py` | the manual landmarks carried into the crop |
 
 Set B is the broad check of the methods (many cameras, no detector in between). The sets that answer "does it work on what the app really cuts" are A, A2, B' and A2'.
 
@@ -66,9 +67,14 @@ python tools/pose/eval_bprime.py                # the methods on the crops after
 python tools/pose/build_template.py             # the template that will ship
 ```
 
-The TypeScript port in the app (`frontend/src/utils/areaResize.ts`, `poseFromPixels.ts`, `poseTemplates.ts`) is made and checked with:
+The TypeScript port in the app (`frontend/src/utils/areaResize.ts`, `poseFromPixels.ts`, `poseTemplates.ts`) is made and checked with the commands below. The first four of them
+measure what the precise model gives on wings that the app has turned to the right (set T):
 
 ```
+python tools/pose/make_test_items.py            # set T: the list of synthetic photos of wings the models have not seen
+#   in the Vite page: window.__ITEMS_FILE = "test_items.json"; window.__PREFIX = "bt"; window.__FROM/__TO = a slice; run browser/export-yolo-crops.js
+python tools/pose/import_bprime.py --prefix bt --out bprime_test
+python tools/pose/measure_precise.py            # the backend's two models on those wings, as they are and turned to the right (backend running)
 python tools/pose/export_ts_template.py         # the shipped template -> frontend/src/utils/poseTemplates.ts
 python tools/pose/make_golden.py                # vectors for the tests of the port (synthetic pictures) -> frontend/tests/fixtures/pose-golden.json
 cd frontend && npm test                         # the tests of the port (Node 22.18 or newer)
