@@ -1,20 +1,23 @@
 // End-to-end test of the orientation switch, through the real UI and the real backend (run on the Vite dev
-// server). A mixed set is uploaded: natural wings (the backend says "right"), their mirror images (the backend
-// says "left") and two wings turned by 180 degrees (upside down). The switch is set to TARGET, Process
-// is clicked, the ZIP (images with metadata + points.csv) is downloaded and checked against what the backend said:
-//  - pixels: with a side wanted (right | left) a wing on the other side is mirrored and a wing that lies upside down (the two
-//    that were turned by 180 degrees: R-*) is turned by 180 degrees, both exactly (a permutation of the pixels), the others are
-//    untouched; with "original" nothing is touched
-//  - landmarks (metadata and CSV): the mirrored wings' numbers are W - 1 - x of what the backend returned, y unchanged
-//  - the pixel under every landmark is the same pixel as before
+// server). A mixed set is uploaded: natural wings (right wings), their mirror images (M-*, left wings) and two wings turned
+// by 180 degrees (R-*, upside down). The switch is set to TARGET, Process is clicked, the ZIP (images with metadata +
+// points.csv) is downloaded and checked:
+//  - pixels: with a side wanted (right | left) a wing on the other side is mirrored and a wing that lies upside down (R-*) is turned
+//    by 180 degrees, both exactly (a permutation of the pixels), the others are untouched; with "original" nothing is touched
+//  - what was sent to the backend: the wing as it is when it is not to be turned, and otherwise (the new flow, which turns the wings from their pixels
+//    before the request) the wing turned exactly as it has to be; in the flow of main (window.__FLOW = "after") every wing as it is
+//  - landmarks (metadata and CSV): those of the backend's answer, turned together with the picture when that is done after the answer
+//  - the pixel under every landmark is the same pixel as in the picture that was sent
 //  - the backend now sees every (unflagged) exported wing on the TARGET side
 //  - Edit brings the originals back: Process again uploads exactly the same bytes
 // The verdicts go to tools/regression/work/collected-e2e-<LABEL>-<TARGET>.json (check_upright.py e2e <LABEL> <TARGET> judges them).
 //   window.__TARGET  right | left | original (default right)
 //   window.__LABEL   the name of the run, e.g. base (default run)
+//   window.__FLOW    "before" (default): the wings are turned before the request; "after": after the answer, as main does it
 (async () => {
   const TARGET = window.__TARGET || "right"; // "right" | "left" | "original"
   const LABEL = window.__LABEL || "run";
+  const FLOW = window.__FLOW || "before";
   const BASE = "http://127.0.0.1:8765";
   const NATURAL = ["PL-0134-000875-R.dw.png", "PL-0212-LP-061-001268-L.dw.png", "PL-0057-000122-R.dw.png", "PL-0001-000420-L.dw.png"];
   const TURNED = ["PL-0062-000223-L.dw.png", "PL-0228-LP-077-100483-R.dw.png"];
@@ -163,32 +166,46 @@
     const exportedBlob = new Blob([bytes], { type: "image/png" });
     const exported = await decode(exportedBlob);
     const W = orig.w, H = orig.h;
-    const expectFlip = !BREAK && TARGET !== "original" && (ans.orientation === "left" || ans.orientation === "right") && ans.orientation !== TARGET;
-    const expectTurn = !BREAK && TARGET !== "original" && f.name.startsWith("R-"); // turned by 180 degrees on purpose: upside down
+    // What has to be done to the wing follows from how the files were made: the mirror images (M-*) are left wings, the others are right wings,
+    // and R-* were turned by 180 degrees on purpose. (Not from the answer of the backend: in the new flow the backend is sent a wing that is turned already.)
+    const side = f.name.startsWith("M-") ? "left" : "right";
+    const expectFlip = !BREAK && TARGET !== "original" && side !== TARGET;
+    const expectTurn = !BREAK && TARGET !== "original" && f.name.startsWith("R-");
     const flipX = expectFlip !== expectTurn, flipY = expectTurn; // mirror and turn together = a vertical mirror image
+    // The wing is turned before the request (the new flow) or after the answer (window.__FLOW = "after", the flow of main).
+    // flip2 is what is done after the answer, to the picture that was sent, and to its landmarks.
+    const flip2X = FLOW === "after" && flipX, flip2Y = FLOW === "after" && flipY;
+    const uploaded = await decode(up.blob);
 
-    let pixelMismatches = exported.w === W && exported.h === H ? 0 : -1;
-    if (pixelMismatches === 0) {
+    const permutationMismatches = (got, from, flipColumns, flipRows) => {
+      if (got.w !== from.w || got.h !== from.h) return -1;
+      let bad = 0;
       for (let y = 0; y < H; y += 1) for (let x = 0; x < W; x += 1) {
-        if (!same(exported.data, (y * W + x) * 4, orig.data, ((flipY ? H - 1 - y : y) * W + (flipX ? W - 1 - x : x)) * 4)) pixelMismatches += 1;
+        if (!same(got.data, (y * W + x) * 4, from.data, ((flipRows ? H - 1 - y : y) * W + (flipColumns ? W - 1 - x : x)) * 4)) bad += 1;
       }
-    }
+      return bad;
+    };
+    const pixelMismatches = permutationMismatches(exported, orig, flipX, flipY);
     const meta = pngText(bytes, "IdentiFly").replace("landmarks:", "").replace(";", "").split(" ").map(Number);
     const row = csvRows.get(f.name) ?? [];
     const clamp = (v, max) => Math.min(max - 1, Math.max(0, v));
     let coordMismatches = 0, csvMismatches = 0, underPointMismatches = 0;
     for (let i = 0; i < 19; i += 1) {
       const ex = rh(ans.coords[i * 2]), ey = rh(ans.coords[i * 2 + 1]);
-      if (meta[i * 2] !== (flipX ? W - 1 - ex : ex) || meta[i * 2 + 1] !== (flipY ? H - 1 - ey : ey)) coordMismatches += 1;
+      if (meta[i * 2] !== (flip2X ? W - 1 - ex : ex) || meta[i * 2 + 1] !== (flip2Y ? H - 1 - ey : ey)) coordMismatches += 1;
       if (row[i * 2] !== meta[i * 2] || row[i * 2 + 1] !== H - 1 - meta[i * 2 + 1]) csvMismatches += 1;
-      if (!same(orig.data, (clamp(ey, H) * W + clamp(ex, W)) * 4, exported.data, (clamp(meta[i * 2 + 1], H) * W + clamp(meta[i * 2], W)) * 4)) underPointMismatches += 1;
+      if (!same(uploaded.data, (clamp(ey, H) * W + clamp(ex, W)) * 4, exported.data, (clamp(meta[i * 2 + 1], H) * W + clamp(meta[i * 2], W)) * 4)) underPointMismatches += 1;
     }
     const after = await analyze(exportedBlob, f.name, W, H);
+    // What was sent: the file as it was (a wing that is not turned, or any wing in the flow of main), or the wing turned exactly as it has to be.
+    const uploadOk = FLOW === "after" || !(expectFlip || expectTurn)
+      ? (await sha(up.blob)) === (await sha(f))
+      : permutationMismatches(uploaded, orig, flipX, flipY) === 0;
     verdicts.push({
       name: f.name, size: `${W}x${H}`, backendSaid: ans.orientation, check: ans.check, expectFlip, expectTurn,
       afterCoords: after.coords, afterH: H, afterSide: after.orientation,
       pixelMismatches, coordMismatches, csvMismatches, underPointMismatches,
-      uploadUnchanged: (await sha(up.blob)) === (await sha(f)),
+      uploadOk,
       sideAfter: after.orientation, checkAfter: after.check,
     });
   }
@@ -212,7 +229,7 @@
   }
 
   await origFetch(`${BASE}/regression/collect/e2e-${LABEL}-${TARGET}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target: TARGET, verdicts }) });
-  const bad = verdicts.filter((v) => v.missing || v.pixelMismatches !== 0 || v.coordMismatches || v.csvMismatches || v.underPointMismatches || !v.uploadUnchanged);
+  const bad = verdicts.filter((v) => v.missing || v.pixelMismatches !== 0 || v.coordMismatches || v.csvMismatches || v.underPointMismatches || !v.uploadOk);
   const sideWrong = BREAK ? [] : verdicts.filter((v) => !v.missing && TARGET !== "original" && !v.check && !v.checkAfter && v.sideAfter !== TARGET).map((v) => v.name);
   return {
     target: TARGET, switchState, files: files.length,

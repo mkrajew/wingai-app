@@ -11,10 +11,11 @@ import {
   readPose,
   readingFromScores,
   scoresOf,
+  turnForReading,
   turnToSide,
   validMask,
 } from "../src/utils/poseFromPixels.ts";
-import type { WingSide } from "../src/utils/poseFromPixels.ts";
+import type { PoseReading, WingSide } from "../src/utils/poseFromPixels.ts";
 import { POSE_TEMPLATES, POSE_TEMPLATES_SHA256 } from "../src/utils/poseTemplates.ts";
 import { float32FromBase64, loadGolden, pictureRgba, sha256 } from "./helpers.ts";
 import type { PictureSpec } from "./helpers.ts";
@@ -198,4 +199,24 @@ test("turnToSide mirrors only a wing on the other side and turns only a wing tha
   assert.deepEqual(turnToSide({ side: "left", upsideDown: true }, "right"), { mirror: true, rotate: true });
   assert.deepEqual(turnToSide({ side: "right", upsideDown: false }, "left"), { mirror: true, rotate: false });
   assert.deepEqual(turnToSide({ side: "left", upsideDown: false }, "left"), { mirror: false, rotate: false });
+});
+
+// ------------------------------------------------------------------------------------------------ whether to turn at all
+const readingOf = (side: WingSide, upsideDown: boolean, margin = 0.3): PoseReading => ({ side, upsideDown, margin, sure: margin >= POSE_SURE_MARGIN, scores: [] });
+
+test("turnForReading turns a wing that was read for sure and does not lie as wanted", () => {
+  assert.deepEqual(turnForReading(readingOf("left", false), "right"), { mirror: true, rotate: false });
+  assert.deepEqual(turnForReading(readingOf("right", true), "right"), { mirror: false, rotate: true });
+  assert.deepEqual(turnForReading(readingOf("left", true), "right"), { mirror: true, rotate: true });
+  assert.deepEqual(turnForReading(readingOf("right", false), "left"), { mirror: true, rotate: false });
+  assert.deepEqual(turnForReading(readingOf("right", true), "left"), { mirror: true, rotate: true });
+  assert.deepEqual(turnForReading(readingOf("left", true), "left"), { mirror: false, rotate: true });
+});
+
+test("turnForReading leaves the wing alone when it is already as wanted, when the reading is not sure and when there is none", () => {
+  assert.equal(turnForReading(readingOf("right", false), "right"), null);
+  assert.equal(turnForReading(readingOf("left", false), "left"), null);
+  assert.equal(turnForReading(readingOf("left", true, 0.099), "right"), null);
+  assert.equal(turnForReading(readingOf("left", true, 0), "right"), null);
+  assert.equal(turnForReading(null, "right"), null);
 });

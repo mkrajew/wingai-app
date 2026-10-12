@@ -43,6 +43,7 @@ await (0, eval)(await (await fetch("http://127.0.0.1:8765/regression/run.js", { 
 | `__LABEL` | the name of the snapshot: `work/collected-<label>.json` |
 
 For the e2e run set `__TARGET` (`right`, `left`, `original`) and `__LABEL`, and run `e2e-orientation.js` the same way. Its verdicts go to `work/collected-e2e-<label>-<target>.json`.
+`__FLOW` is `before` (the default: the wings are turned from their pixels before the request) or `after` (the flow of `main`, which turns them after the answer).
 
 The labels used for the baseline of the `main` branch: `base-S1r`, `base-S1l`, `base-S1o`, `base-S2*`, `base-S3*` (the letter is the orientation), `base-S1o-precise`,
 `base-S2o-precise`, `base-S3o-precise`, `base-e2e-<target>` and the repeated S1 runs `base-S1r-t2`, `-t3` and so on (timing, and the proof that a run repeats exactly).
@@ -51,12 +52,16 @@ The labels used for the baseline of the `main` branch: `base-S1r`, `base-S1l`, `
 
 ```
 node tools/regression/compare.mjs <labelA> <labelB>
+node tools/regression/compare-oriented.mjs <baseline label> <new label>
 backend/.venv/Scripts/python tools/regression/check_upright.py reanalysis <label> right|left|none
 backend/.venv/Scripts/python tools/regression/check_upright.py e2e <label> right|left|original
 ```
 
 * `compare.mjs`: names, what was sent to the backend, the answers, the shown pictures, the landmarks and the console must be equal. The browser draws a canvas
   on the GPU or on the CPU, so a picture may differ by one colour level (block means within 0.6 on average); landmarks within 0.05 px. Timing is only printed.
+* `compare-oriented.mjs`: the baseline of `main` (the wings are turned after the answer, the run was made with `__REANALYZE`) against the new flow. The final pictures must be the
+  same, every picture sent must be a final picture of the baseline (it was sent already turned), and the landmarks must be those that the backend finds on the final picture,
+  which are the ones of the baseline's second analysis. A photo whose request failed is shown, in the new flow, turned like the others (the baseline shows it as it was).
 * `check_upright.py reanalysis`: the independent judge. The backend's own alignment to the mean shape says, for every shown picture, which side it is on and
   how far it is turned (near 0 degrees = upright, near 180 = upside down), and how far the landmarks of the app are from the ones found again on the shown picture.
 * The distance column is meant for the `rotation` model. On a wing that the `precise` model cannot read (mirrored or upside down) its landmarks are far away: that is
@@ -68,6 +73,8 @@ backend/.venv/Scripts/python tools/regression/check_upright.py e2e <label> right
 
 * `turn-canvas.js`: does `turnedCanvas` (`src/utils/image.ts`) move the pixels exactly as the turn of the app does? It needs only the Vite page and the helper server.
   It runs on its own and leaves the answer in `window.__turnCanvasResult` (see the header of the file).
+* `orient-picture.js`: does `orientPicture.ts` read the pose of real wings (six wings of the PL database in the four poses, a flat picture, a small one and a big one that
+  is read from a smaller copy) and turn them to the wanted side, upright, pixel for pixel? It runs on its own like `turn-canvas.js` and leaves the answer in `window.__orientPictureResult`.
 * `switches.js`: do the Orientation and Model switches of the header constrain each other as `wingOptions.ts` says (the precise model with the right orientation is allowed,
   with the left one it is not)? It clicks through a row of steps in the real page and needs no backend.
 

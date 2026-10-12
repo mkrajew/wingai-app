@@ -251,3 +251,13 @@ export function readPose(rgba: ArrayLike<number>, w: number, h: number): PoseRea
 export function turnToSide(reading: Pick<PoseReading, "side" | "upsideDown">, wanted: WingSide): Turn {
   return { mirror: reading.side !== wanted, rotate: reading.upsideDown };
 }
+
+/**
+ * The turn to make of a picture whose pose was read, or null when nothing is to be done: the pose could not be read, the reading is not
+ * sure (a wing is left as it is when it is not known how it lies), or the wing already lies as wanted.
+ */
+export function turnForReading(reading: PoseReading | null, wanted: WingSide): Turn | null {
+  if (reading === null || !reading.sure) return null;
+  const turn = turnToSide(reading, wanted);
+  return turn.mirror || turn.rotate ? turn : null;
+}
