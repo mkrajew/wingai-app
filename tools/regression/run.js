@@ -6,6 +6,10 @@
 //                          wing saved as JPEG (no detections: converted, not cropped) and a broken .jpg; the backend answers 500 for one photo;
 //                          the orientation switch is set (window.__ORIENT: right | left | original, default right)
 //                      "S3": seven wings that are already cut (no Detect), upright or upside down, on either side
+//                      "S6": the photos of S1 three times (24 photos at once)
+//                      "S4": four photos, Detect, and the wings of the third are extracted in the preview and processed as a picture of their own
+//                      "S5": the wings of S3, two of which are turned by hand in the preview (Flip H, Flip V) before Process
+//   window.__ABORT_AFTER_MS  Process is given up after that many milliseconds (Edit) and clicked again; only the second run is reported
 //   window.__ORIENT    right | left | original: the orientation switch (S1 and S3 leave it alone when it is not set)
 //   window.__MODEL     precise | rotation: the model switch (not touched when it is not set; precise puts the orientation on "original")
 //   window.__REANALYZE true: send every picture of the review to the backend again (judged offline by check_upright.py)
@@ -89,7 +93,13 @@
   const first = [], late = [];
   if (SCENARIO === "S1") {
     for (const id of [6466, 6467, 6468, 6469, 6470, 6471, 6472, 6473]) first.push(mk(await raw(`IMG_${id}.JPG`), `IMG_${id}.JPG`));
-  } else if (SCENARIO === "S3") {
+  } else if (SCENARIO === "S6") {
+    // the eight photos of S1 three times, under different names: 24 photos at once
+    for (const copy of ["", "_b", "_c"]) for (const id of [6466, 6467, 6468, 6469, 6470, 6471, 6472, 6473]) first.push(mk(await raw(`IMG_${id}.JPG`), `IMG_${id}${copy}.JPG`));
+  } else if (SCENARIO === "S4") {
+    // four photos; in the preview the wings of the third are extracted as a separate picture, which is then processed like a wing that is already cut
+    for (const id of [6466, 6467, 6468, 6469]) first.push(mk(await raw(`IMG_${id}.JPG`), `IMG_${id}.JPG`));
+  } else if (SCENARIO === "S3" || SCENARIO === "S5") {
     // cut and turned wings of the PL set: flagged or not, upright or upside down, a right or a left wing (a vertical mirror image)
     const wingBmp = async (name) => createImageBitmap(await (await origFetch(`${BASE}/cropped/PL-wing-images/${name}`)).blob());
     const make = async (bmp, { cutLeft = 0, cutRight = 0, how = "id" }) => {
@@ -118,11 +128,47 @@
     late.push(mk(await oc.convertToBlob({ type: "image/jpeg", quality: 0.95 }), "PLwing.jpg"));
     late.push(mk(new Blob(["this is not a jpeg ".repeat(200)]), "broken.jpg")); // cannot be decoded
   }
+  window.__runStage = "uploading";
   await upload(first);
-  if (SCENARIO !== "S3") {
+  window.__runStage = "uploaded";
+  if (SCENARIO !== "S3" && SCENARIO !== "S5") {
     btn("Detect").click();
     await waitFor(() => document.querySelectorAll("li .badge").length >= first.length, "detections");
     await ticks(30);
+  }
+  // the buttons of the preview window: the pictures are shown one at a time, "Next" goes to the following one
+  const inPreview = (text) => [...document.querySelectorAll("[role=dialog] button")].find((b) => b.textContent.trim() === text);
+  const previewPicture = () => document.querySelector("[role=dialog] img")?.getAttribute("src") ?? null;
+  const manual = []; // what was turned by hand in the preview (S5)
+  if (SCENARIO === "S4") {
+    btn("Preview").click(); await waitFor(() => inPreview("Extract wings"), "the preview");
+    await ticks(30);
+    inPreview("Next").click(); await ticks(30);
+    inPreview("Next").click(); await ticks(30);
+    inPreview("Extract wings").click();
+    await waitFor(() => document.querySelectorAll("li").length >= first.length + 1, "the extracted wing is in the list");
+    await ticks(30);
+    inPreview("Close")?.click(); await ticks(40); // the window closes by itself after the extraction
+  }
+  if (SCENARIO === "S5") {
+    // the user turns two of the wings by hand before Process: an upright wing is mirrored, an upside-down one is mirrored vertically
+    btn("Preview").click(); await waitFor(() => inPreview("↔ Flip H"), "the preview");
+    await ticks(30);
+    const transform = async (label) => {
+      const before = previewPicture();
+      const where = document.querySelector("[role=dialog]")?.innerText.replace(/\s+/g, " ").slice(0, 24) ?? null;
+      inPreview(label).click();
+      // the picture of the window really has to change (it must not be the window that closed)
+      await waitFor(() => { const now = previewPicture(); return now !== null && now !== before; }, `the picture changes after ${label}`);
+      manual.push({ label, where });
+      await ticks(30);
+    };
+    inPreview("Next").click(); await ticks(30);
+    inPreview("Next").click(); await ticks(30); // "ok-up.png"
+    await transform("↔ Flip H");
+    inPreview("Next").click(); await ticks(30); // "ok-down.png"
+    await transform("↕ Flip V");
+    inPreview("Close")?.click(); await ticks(40);
   }
   if (late.length) await upload(late);
   if (SCENARIO === "S2" || window.__ORIENT) { radio(ORIENT_LABEL[ORIENT]).click(); await ticks(40); }
@@ -141,7 +187,28 @@
   let observer = null;
   try { observer = new PerformanceObserver((list) => { for (const e of list.getEntries()) longTasks.push(e.duration); }); observer.observe({ entryTypes: ["longtask"] }); } catch { /* not supported */ }
   const t0 = performance.now();
+  window.__runStage = "processing";
   btn("Process").click();
+  // window.__ABORT_AFTER_MS: Process is given up after that long (Edit), and Process is clicked again. The second run is the one that is reported
+  let aborted = null;
+  if (window.__ABORT_AFTER_MS) {
+    // not setTimeout: a hidden pane delays timers a lot, and the run would be over by then
+    for (const from = performance.now(); performance.now() - from < window.__ABORT_AFTER_MS;) await tick();
+    aborted = { errors: errors.slice(), warnings: warnings.slice(), requestsBefore: uploads.length };
+    // the Edit button is disabled while the wings are processed; the back button of the browser asks the same question
+    window.__runStage = "abort: back button";
+    history.back();
+    const dialog = await waitFor(() => document.querySelector("[role=dialog]"), "the confirmation of Edit", 30000); // the page is busy with Process, so it takes a moment
+    await ticks(20);
+    const confirm = [...dialog.querySelectorAll("button")].reverse().find((b) => !["Cancel", "Close", ""].includes(b.textContent.trim()));
+    window.__runStage = `abort: confirm ${confirm ? confirm.textContent.trim() : "none"}`;
+    confirm.click();
+    await waitFor(() => btn("Process"), "back on the upload screen");
+    await ticks(60);
+    uploads.length = 0; answers.length = 0; errors.length = 0; warnings.length = 0;
+    window.__runStage = "processing again after the abort";
+    btn("Process").click();
+  }
   let firstHref = null, barSeen = false;
   for (;;) {
     const t = Math.round(performance.now() - t0);
@@ -163,6 +230,7 @@
   const listNames = [...document.querySelectorAll(".list-group button .text-truncate")].map((e) => e.textContent);
 
   // ---- what the review shows for every image
+  window.__runStage = "reading the review";
   const images = [];
   for (let i = 0; i < listNames.length; i += 1) {
     if (i > 0) { window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); await ticks(20); }
@@ -182,6 +250,7 @@
   // ---- window.__REANALYZE: send every picture the review shows to the backend again. This is the independent proof
   // that the final pictures are upright and on the wanted side: the answers are judged offline with the backend's
   // own alignment to the mean shape (check-upright.py).
+  window.__runStage = "analysing again";
   const reanalysis = [];
   if (window.__REANALYZE) {
     for (let i = 1; i < listNames.length; i += 1) { window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })); await ticks(5); } // back to the first photo
@@ -204,11 +273,12 @@
   }
 
   // ---- what went to the backend
+  window.__runStage = "reporting";
   const sent = [];
   for (const u of uploads) sent.push({ name: u.name, x_size: u.x_size, y_size: u.y_size, model: u.model, bytes: u.bytes, pixels: await pixelHash(u.blob) });
   const result = {
     scenario: SCENARIO, label: LABEL, orient: SCENARIO === "S2" || window.__ORIENT ? ORIENT : "default", model: MODEL ?? "default", files: all.map((f) => f.name),
-    listNames, banner, uploads: sent, answers, images, reanalysis, console: { errors, warnings }, timeline,
+    listNames, banner, uploads: sent, answers, images, reanalysis, console: { errors, warnings }, timeline, aborted, manual,
   };
   await origFetch(`${BASE}/regression/collect/${LABEL}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(result) });
   const mirrored = images.filter((im) => { const u = sent.find((s) => s.name.replace(/\.png$/i, "") === (im.name || "").replace(/\.dw\.png$/i, "").replace(/\(\d+\)$/, "")); return u && im.picture && u.pixels.hash !== im.picture.hash; }).length;

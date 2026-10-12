@@ -21,6 +21,9 @@ Data: the photos `IMG_6466` to `IMG_6473` of the 2026 Swietokrzyskie series (`/r
 | `S1` | eight photos, all cropped by the detector: all four poses of a wing are among them |
 | `S2` | six photos and one more under a name that gives the same output name; after Detect a clean wing saved as JPEG (not cropped) and a broken `.jpg`; the backend answers 500 for one photo |
 | `S3` | seven wings that are already cut (no Detect), upright or upside down, on either side, flagged or not |
+| `S4` | four photos, Detect, and the wings of the third are extracted in the preview ("Extract wings") and processed as pictures of their own. That photo has a second detection that is only a fragment of a wing, which the backend flags in every run; the pose read from a fragment can be sure and wrong, and then the answer of the rotation model turns it back (with a warning in the console) |
+| `S5` | the wings of `S3`, two of which are turned by hand in the preview (Flip H, Flip V) before Process |
+| `S6` | the photos of `S1` three times, under different names: 24 photos at once (timing) |
 
 `e2e-orientation.js` uploads natural wings, their mirror images and two wings turned by 180 degrees, processes them, downloads the ZIP and checks
 pixels, landmarks and the metadata against what the backend said. Edit must bring the originals back.
@@ -40,6 +43,7 @@ await (0, eval)(await (await fetch("http://127.0.0.1:8765/regression/run.js", { 
 | `__ORIENT` | `right`, `left`, `original`: the orientation switch (S1 and S3 leave it alone when it is not set) |
 | `__MODEL` | `precise`, `rotation`: the model switch (precise puts the orientation on `original`) |
 | `__REANALYZE` | `true`: send every shown picture to the backend again, for `check_upright.py` |
+| `__ABORT_AFTER_MS` | Process is given up after that long (with the back button of the browser: Edit is disabled while the wings are processed) and Process is clicked again; only the second run is reported |
 | `__LABEL` | the name of the snapshot: `work/collected-<label>.json` |
 
 For the e2e run set `__TARGET` (`right`, `left`, `original`) and `__LABEL`, and run `e2e-orientation.js` the same way. Its verdicts go to `work/collected-e2e-<label>-<target>.json`.
