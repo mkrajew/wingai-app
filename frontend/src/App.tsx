@@ -36,9 +36,13 @@ import {
   chooseModel,
   chooseOrientation,
   needsMirroring,
-  orientationToApply,
+  planRequest,
 } from "./utils/wingOptions";
-import type { WingModel, WingOptions } from "./utils/wingOptions";
+import type {
+  WingModel,
+  WingOptions,
+  WingOrientation,
+} from "./utils/wingOptions";
 import { clampToImage, turnLandmarks } from "./utils/landmarks";
 import { needsRotation } from "./utils/wingPose";
 import { useT } from "./i18n";
@@ -748,7 +752,7 @@ function App() {
     preparedImage: PreparedImage,
     image: ImageFile,
     model: WingModel,
-    orientation: ReturnType<typeof orientationToApply>,
+    orientation: WingOrientation,
     signal: AbortSignal,
     madeUrls: Set<string>,
   ): Promise<ImageFile> {
@@ -843,8 +847,9 @@ function App() {
   ) {
     if (images.length === 0) return;
 
-    const { model } = options;
-    const orientation = orientationToApply(options);
+    const plan = planRequest(options);
+    const { model } = plan;
+    const orientation = plan.correctAfter;
     const abortController = new AbortController();
     processingAbortRef.current = abortController;
     const { signal } = abortController;

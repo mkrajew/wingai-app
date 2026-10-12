@@ -68,6 +68,8 @@ backend/.venv/Scripts/python tools/regression/check_upright.py e2e <label> right
 
 * `turn-canvas.js`: does `turnedCanvas` (`src/utils/image.ts`) move the pixels exactly as the turn of the app does? It needs only the Vite page and the helper server.
   It runs on its own and leaves the answer in `window.__turnCanvasResult` (see the header of the file).
+* `switches.js`: do the Orientation and Model switches of the header constrain each other as `wingOptions.ts` says (the precise model with the right orientation is allowed,
+  with the left one it is not)? It clicks through a row of steps in the real page and needs no backend.
 
 ## Notes for working in the Browser pane
 
