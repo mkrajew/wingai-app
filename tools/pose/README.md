@@ -66,4 +66,14 @@ python tools/pose/eval_bprime.py                # the methods on the crops after
 python tools/pose/build_template.py             # the template that will ship
 ```
 
-Everything runs with the Python of the backend (`backend/.venv`), no new dependencies. Big files go to `tools/pose/work/` (git-ignored).
+The TypeScript port in the app (`frontend/src/utils/areaResize.ts`, `poseFromPixels.ts`, `poseTemplates.ts`) is made and checked with:
+
+```
+python tools/pose/export_ts_template.py         # the shipped template -> frontend/src/utils/poseTemplates.ts
+python tools/pose/make_golden.py                # vectors for the tests of the port (synthetic pictures) -> frontend/tests/fixtures/pose-golden.json
+cd frontend && npm test                         # the tests of the port (Node 22.18 or newer)
+python tools/pose/parity_table.py               # what the reference says about every saved real crop -> work/parity/table.json
+node tools/pose/check_ts_parity.mjs             # the TypeScript on the same crops: equal to the reference, byte for byte?
+```
+
+Everything in Python runs with the Python of the backend (`backend/.venv`), no new dependencies. Big files go to `tools/pose/work/` (git-ignored).
