@@ -8,6 +8,8 @@
   GET  /browser/<file>         the scripts of tools/pose/browser
   GET  /work/<file>            tools/pose/work (the lists of photos that the browser scripts make)
   POST /collect/<name>         writes the JSON body to tools/pose/work/inbox/collected-<name>.json
+  GET  /regression/<file>      the scripts of tools/regression
+  POST /regression/collect/<name>   writes the JSON body to tools/regression/work/collected-<name>.json
 """
 import http.server
 import json
@@ -19,15 +21,17 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-from config import CROPPED, RAW_SETS, WORK  # noqa: E402
+from config import CROPPED, RAW_SETS, REPO, WORK  # noqa: E402
 
 INBOX = WORK / "inbox"
+REGRESSION = REPO / "tools" / "regression"
 ROUTES = {
     "/rawbm/": RAW_SETS["bm"],
     "/rawpl/": RAW_SETS["pulawy"],
     "/cropped/": CROPPED,
     "/browser/": HERE,
     "/work/": WORK,
+    "/regression/": REGRESSION,
 }
 
 
@@ -57,15 +61,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        if not self.path.startswith("/collect/"):
+        for prefix, folder in (("/regression/collect/", REGRESSION / "work"), ("/collect/", INBOX)):
+            if self.path.startswith(prefix):
+                break
+        else:
             self.send_response(404)
             self.end_headers()
             return
-        name = "".join(c for c in self.path[len("/collect/") :] if c.isalnum() or c in "-_")
+        name = "".join(c for c in self.path[len(prefix) :] if c.isalnum() or c in "-_")
         body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         json.loads(body)  # must be valid JSON
-        INBOX.mkdir(parents=True, exist_ok=True)
-        (INBOX / f"collected-{name}.json").write_bytes(body)
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"collected-{name}.json").write_bytes(body)
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"ok")
