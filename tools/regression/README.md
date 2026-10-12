@@ -61,3 +61,17 @@ backend/.venv/Scripts/python tools/regression/check_upright.py e2e <label> right
   how far it is turned (near 0 degrees = upright, near 180 = upside down), and how far the landmarks of the app are from the ones found again on the shown picture.
 * The distance column is meant for the `rotation` model. On a wing that the `precise` model cannot read (mirrored or upside down) its landmarks are far away: that is
   the baseline of the `precise` runs, not a fault of the harness.
+* The landmarks that `precise` gives for such a wing (the ones the backend flags) change from run to run, with the same code and the same picture. When two
+  `precise` runs are compared, only the unflagged wings can be expected to be equal.
+
+## Other scripts
+
+* `turn-canvas.js`: does `turnedCanvas` (`src/utils/image.ts`) move the pixels exactly as the turn of the app does? It needs only the Vite page and the helper server.
+  It runs on its own and leaves the answer in `window.__turnCanvasResult` (see the header of the file).
+
+## Notes for working in the Browser pane
+
+* A hidden pane waits about a second in every `canvas.toBlob`, and `img.decode()` never settles there: use `onload`. The tool gives a script 45 seconds,
+  so a long one is started without `await` and its answer is read later from `window`.
+* The Vite dev server can keep serving the version of a module from before the last of several quick edits. After editing, touch the files
+  (`touch frontend/src/...`), or fetch the module with a query (`/src/utils/image.ts?x=1`) to see what the server holds.
