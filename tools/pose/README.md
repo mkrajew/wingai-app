@@ -37,6 +37,10 @@ Not in this repository. Set the folder with `BEES_DATA` (default `~/projects/bee
 | **A** | real crops of the app: its own detector and `straightenedCrop` on the raw photos (2026 series, BM, Pulawy) | the backend (model `rotation`), as the app judges a wing |
 | **A2** | the small, already cropped wings of the Pulawy folder | the backend |
 | **C** | perturbed wings of set B (tilt, framing, light, JPEG, blur, noise, a part outside the photo, dirt) | exact |
+| **B'** | wings of the holdout fold of set B put on a bigger canvas like a photo (mirrored or not, turned, scaled) and sent through the **real YOLO model and crop of the app**; only well cut crops count (all 19 landmarks inside) | exact (the manual landmarks carried into the crop) |
+| **A2'** | the small Pulawy wings the same way (through YOLO, in all four poses) | the backend |
+
+Set B is the broad check of the methods (many cameras, no detector in between). The sets that answer "does it work on what the app really cuts" are A, A2, B' and A2'.
 
 ## Order of work
 
@@ -52,7 +56,14 @@ python tools/pose/sweep.py ink|hog|ghist        # which variant is best (develop
 python tools/pose/analyze_sweep.py hog
 python tools/pose/evaluate.py                   # the finalists on every set (work/eval/finalists.json)
 python tools/pose/stress.py                     # set C
-python tools/pose/rules.py                      # the "unsure" rule
+python tools/pose/compare.py                    # one table: every method against every set
+python tools/pose/rules.py --hog NAME --ink NAME   # the "unsure" rule
+python tools/pose/eval_a_complete.py            # set A with an explicit "well cut" rule
+python tools/pose/make_bprime_items.py          # set B': the list of synthetic photos
+#   in the Vite page: window.__FROM/__TO = a slice; run browser/export-yolo-crops.js  (several tabs, each a slice)
+python tools/pose/import_bprime.py              # the crops and their truth
+python tools/pose/eval_bprime.py                # the methods on the crops after the real YOLO
+python tools/pose/build_template.py             # the template that will ship
 ```
 
 Everything runs with the Python of the backend (`backend/.venv`), no new dependencies. Big files go to `tools/pose/work/` (git-ignored).

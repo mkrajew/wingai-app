@@ -6,6 +6,7 @@
   GET  /rawbm/<path>           a photo of skrzydła-BM, /rawpl/<path>: of the Pulawy folder
   GET  /cropped/<path>         the ready-made wing databases (processed/cropped)
   GET  /browser/<file>         the scripts of tools/pose/browser
+  GET  /work/<file>            tools/pose/work (the lists of photos that the browser scripts make)
   POST /collect/<name>         writes the JSON body to tools/pose/work/inbox/collected-<name>.json
 """
 import http.server
@@ -26,6 +27,7 @@ ROUTES = {
     "/rawpl/": RAW_SETS["pulawy"],
     "/cropped/": CROPPED,
     "/browser/": HERE,
+    "/work/": WORK,
 }
 
 

@@ -2,6 +2,7 @@
 
     python tools/pose/label_real.py crops      # the real crops in work/real (set A)
     python tools/pose/label_real.py pulawy     # the small, already cropped wings of the Pulawy folder (set A2)
+    python tools/pose/label_real.py pulawy-crops   # the same wings after the real YOLO and crop, in all four poses (set A2')
 
 The backend must be running (WINGAI_BACKEND, default http://127.0.0.1:8000). Answers are cached in work/real/labels*.json.
 """
@@ -72,6 +73,10 @@ def main():
     if what == "crops":
         meta = json.loads((REAL / "meta.json").read_text(encoding="utf-8"))
         run([(cid, REAL / f"{cid}.png") for cid in meta], REAL / "labels.json")
+    elif what == "pulawy-crops":
+        folder = WORK / "pulawy_crops"
+        meta = json.loads((folder / "meta.json").read_text(encoding="utf-8"))
+        run([(cid, folder / f"{cid}.png") for cid, m in meta.items() if m["detected"]], folder / "labels.json")
     elif what == "pulawy":
         root = RAW_SETS["pulawy"]
         items = []

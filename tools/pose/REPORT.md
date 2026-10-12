@@ -5,10 +5,24 @@ by simple methods without a neural network, before the picture is sent to the ba
 long axis horizontal (what the YOLO crop of the app gives).
 
 **Answer.** Yes. Histograms of gradient directions in a grid of cells ("HOG with position"), compared with the average wing in each of the
-four poses, made **no mistake on 19 192 + 18 640 decisions on complete wings of 13 databases (a blind holdout and a leave-one-country-out test), on 234 real crops of the app
-(182 of them the main detection of their photo), on 384 small wings from another lab, and 6 mistakes on 92 000 decisions with perturbations**.
-"Where is the ink" (ink) is almost as good and much more tolerant of a strongly tilted wing. Used together (both must agree, and the HOG margin must be at least 0.10)
-they made **no mistake at all in any of these sets** while accepting 99.7 to 100% of the decisions. The global gradient histogram (no position) is clearly worse.
+four poses, made **no mistake on 5 104 well cut crops after the real YOLO model and crop of the app, in all four poses**:
+192 main detections of real raw photos (2026 series, BM, Pulawy), 3 933 wings of 13 databases (put on a canvas like a photo, mirrored or not, turned at random,
+then found and cut by the detector) and 979 small wings of another lab. The smallest margin of a correct decision is 0.30, three times the margin of 0.10 that the rule asks for.
+"Where is the ink" (ink) made no mistake either with the right setting and is much more tolerant of a strongly tilted wing. A YOLO crop is straight to within a few degrees (3 933 crops of B': median 0.4, 99.9% below 2.6, at most 4.9 degrees; real crops of A: at most 2.1), so that tolerance is a reserve.
+Used together (both must agree, and the HOG margin must be at least 0.10) they made no mistake in any set and accepted all of these crops.
+The global gradient histogram (no position) is clearly worse. Everything measured without the detector in between (26 000 wings, 92 000 perturbed decisions) says the same and is kept below as a broader check.
+
+## What is after YOLO and what is not
+
+The aim is the statistics of **crops that the app really makes**: the YOLO OBB model (`best-dota.onnx`) finds the wing, `straightenedCrop` cuts it, and only well cut wings count.
+Partly visible wings (the other detections at the border of a photo) are not good crops and are left out of the headline numbers.
+
+| set | after the real YOLO and crop? | well cut means |
+|---|---|---|
+| **A** (real raw photos) | yes | the main detection of the photo, its box inside the photo (at least 97% of the crop is photo) |
+| **B'** (databases on a canvas) | yes | all 19 manual landmarks inside the crop, 1.5% from its border |
+| **A2'** (small Pulawy wings on a canvas) | yes | the backend is sure about the pose and does not flag the wing |
+| B, C, A2 | **no**: pictures of the databases cut by their authors, or perturbed | landmarks inside the picture |
 
 ## Poses and the two questions
 
@@ -29,8 +43,10 @@ Upside down = the thick vein is at the bottom. Which wing = where the base is, o
 | set | what | size | truth |
 |---|---|---|---|
 | **B** | wings of 13 databases with manual landmarks (AT ES GR HR HU MD ME PL PT RO RS SI TR), straightened like a crop of the app (rotated until the backend reads the same angle as for real crops), each shown in the 4 poses. Split by colony (5 folds); the development folds choose, the holdout fold (4 816 wings, 4 798 complete) judges | 26 468 wings | exact (the pose is made by flipping) |
-| **A** | real crops: the app's own detector and `straightenedCrop` on the raw photos of the 2026 series (45 photos), skrzydła-BM (105) and Pulawy (42) | 274 crops, 182 are the main detection, sure and not flagged | the backend (model `rotation`) |
+| **A** | real crops: the app's own detector and `straightenedCrop` on the raw photos of the 2026 series (45 photos), skrzydła-BM (105) and Pulawy (42) | 274 crops; 194 are the main detection of their photo, 192 of them with the box inside the photo (180 of those are also not flagged by the backend) | the backend (model `rotation`) |
 | **A2** | small, already cropped wings of the Pulawy folder (another lab and camera) | 1 012, of which 384 sure and not flagged (all upright: the backend flagged the rest) | the backend |
+| **B'** | the holdout wings of set B put on a canvas like a photo (mirrored or not, turned at random, scaled; 30% of the turns are exactly 0, 90, 180 or 270 degrees plus noise) and sent through the **real YOLO model and crop of the app**; the manual landmarks are carried into the crop | 3 937 photos: the detector found the wing in 3 936 (99.97%), 3 933 crops are complete (979 `id`, 985 `rot180`, 1 001 `flipH`, 968 `flipV`) | exact (the landmarks of the crop) |
+| **A2'** | the 1 012 small Pulawy wings the same way | the detector found the wing in all 1 011 that loaded; the backend flags 32 (3%) and is sure about the rest: 979 crops (238, 263, 234, 244) | the backend |
 | **C** | 1 000 complete holdout wings, 23 perturbations: tilt (±3°, ±6°), tighter/looser crop (10%), brightness, gamma, contrast, JPEG (40, 70), blur, noise, low resolution, black part outside the photo (15% on each side, 30%), dirt | 92 000 decisions per method | exact |
 
 "Complete" = every one of the 19 landmarks is at least 1.5% of the picture away from its border (strips that cut a wing are not good crops).
@@ -47,13 +63,37 @@ The residual tilt of the real crops is small: median 0.34°, 99th percentile 1.5
 
 ## Results
 
-### 1. The sweep (development folds, 3 490 wings x 4 poses, cross validation by colony)
+### 0. After the real YOLO and crop (the sets that count)
+
+All methods use the templates made from the development folds of set B; none of these wings or photos was used to make a template.
+Errors / crops (95% upper bound of the error rate):
+
+| method | A real, main, inside the photo (192) | B' databases through YOLO (3 933) | A2' Pulawy small through YOLO (979) |
+|---|---|---|---|
+| **hog-16x6-b8s** | **0** (1.96%) | **0** (0.10%) | **0** (0.39%) |
+| hog-8x3-b4s, hog-8x3-b16u-s1, hog-16x6-b16u-s1, hog-16x6-b8s-vein | 0 | 0 | not run |
+| ghist-32s-gray / ghist-32s-vein | 0 | 0 | not run |
+| ghist-16s-gray | 0 | 34 | not run |
+| **ink-k11-p1-thirds** | 0 | **0** | **0** |
+| ink-k11-p2-halves | 0 | 3 | 0 |
+| ink-k11-p2-centroid | 0 | 10 | 0 |
+| ink-k21-thirds (the first guess) | 1 (of 182) | 86 | not run |
+
+* Every one of the four poses is in each set (A: 99 / 36 / 39 / 18, B': 979 / 985 / 1 001 / 968, A2': 238 / 263 / 234 / 244); the confusion matrix of `hog-16x6-b8s` on B' is the diagonal.
+* The margin of the correct decisions of `hog-16x6-b8s`: B' minimum 0.324 (median 0.515), A2' minimum 0.375, A minimum 0.30. With the rule (margin at least 0.10 and ink agrees) **every crop is accepted and none is wrong**, for every TAU up to 0.30.
+* 1 520 of the B' crops were turned to within 6 degrees of a multiple of 90, where the axis angle of the detector flips by 180 degrees: all correct. The method reads the pixels of the crop, not the angle of the box.
+* A cut wing never reached these numbers: the detector gave a crop that cut a landmark off in 3 of 3 936 cases (those are not counted), and the main detections cut by the photo border were left out of A (2 of 194; both are also right).
+* After the YOLO crop the backend flags 3% of the small Pulawy wings; sent as they are (without the detector) it flagged 62% of them. The cut itself helps the backend.
+
+### 1. The sweep (broader check, no detector in between)
+
+(Development folds, 3 490 wings x 4 poses, cross validation by colony.)
 
 All 120 HOG variants read 99.2 to 99.5% of all wings correctly, and **100.000% (0 errors in 13 740 decisions) of the complete wings** for the 12 that were repeated on complete wings only.
 Every error of the sweep was a wing cut by the border of its picture (55 of 3 490 sampled wings). The settings hardly matter (the mean over all variants moves by at most 0.04 points per setting), so the choice is made on robustness and simplicity.
 With the right setting ink also makes no mistake on complete wings (kernel 11 is the key; 21 and 31 are worse). The global histogram needs 32 bins on the vein map to reach the same, and it is the least robust.
 
-### 2. Every method against every set (errors / decisions)
+### 2. Every method against the sets without the detector (errors / decisions)
 
 | method | B holdout (straightened) | B holdout (tilted as in the database) | other country (LOCO) | A real, main | A real, all | A2 Pulawy small | perturbations |
 |---|---|---|---|---|---|---|---|
@@ -78,7 +118,7 @@ With the right setting ink also makes no mistake on complete wings (kernel 11 is
   HOG makes 0 to 4 there.
 * The global histogram (no position) is not safe: tilt, black parts and the left out countries break it.
 
-### 3. The rule: accept only when both methods agree and the margin is large enough
+### 3. The rule: accept only when both methods agree and the margin is large enough (sets without the detector; after YOLO it accepts everything and none is wrong)
 
 HOG `hog-16x6-b8s` with ink `ink-k11-p1-thirds`. Cells: share of decisions accepted / wrong decisions among the accepted.
 
