@@ -20,6 +20,22 @@ def shrink(gray, w=W, h=H):
     return cv2.resize(gray, (w, h), interpolation=cv2.INTER_AREA)
 
 
+def valid_mask(gray, w=W, h=H, black_level=2, min_black=230):
+    """The part of a crop that is really photo. straightenedCrop leaves the part outside the photo black (0): it is a large area that touches
+    the border of the crop. Dark veins are also very dark, but they are not exactly black and they do not touch the border, so only
+    the cells that are (almost) all black AND connected to the border count as outside the photo. One cell around them is dropped too."""
+    black = (gray <= black_level).astype(np.uint8) * 255
+    cells = (cv2.resize(black, (w, h), interpolation=cv2.INTER_AREA) >= min_black).astype(np.uint8)
+    n, lab = cv2.connectedComponents(cells, connectivity=4)
+    if n <= 1:
+        return np.ones((h, w), bool)
+    border = set(lab[0, :].tolist()) | set(lab[-1, :].tolist()) | set(lab[:, 0].tolist()) | set(lab[:, -1].tolist())
+    border.discard(0)
+    outside = np.isin(lab, list(border)).astype(np.uint8) if border else np.zeros((h, w), np.uint8)
+    outside = cv2.dilate(outside, np.ones((3, 3), np.uint8))
+    return outside == 0
+
+
 def turn(a, pose):
     """The picture (or any array with rows, columns first) in one of the four poses."""
     if pose == "id":

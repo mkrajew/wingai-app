@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 
 import features as F
-from common import all_poses, fold_of, group_of, luma, shrink, wilson_upper
+from common import all_poses, fold_of, group_of, luma, shrink, valid_mask, wilson_upper
 from config import COUNTRIES, H, POSES, W, WORK
 
 HOLDOUT_FOLD = 4
@@ -33,8 +33,7 @@ def real_gray(path):
     img = cv2.imread(str(path), cv2.IMREAD_COLOR)
     gray = luma(img)
     g = shrink(gray)
-    valid = cv2.resize((gray > 6).astype(np.uint8) * 255, (W, H), interpolation=cv2.INTER_AREA) > 250
-    return g, valid
+    return g, valid_mask(gray)
 
 
 def load_real():
@@ -73,19 +72,33 @@ def load_pulawy_small():
 
 
 # ----------------------------------------------------------------------------------------------------------- descriptors
+def rotate_small(g, degrees):
+    """The working-size picture turned a little (what a tilted crop would look like); the edge is repeated."""
+    m = cv2.getRotationMatrix2D((W / 2, H / 2), degrees, 1.0)
+    return cv2.warpAffine(g, m, (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+
+
 def _rep_job(args):
-    path, spec, s, e, poses = args
+    path, spec, s, e, poses, aug = args
     arr = np.load(path, mmap_mode="r")
     out = []
     for i in range(s, e):
-        ps = all_poses(np.asarray(arr[i]))
-        out.append(np.stack([F.rep_one(ps[p], spec) for p in poses]))
+        g0 = np.asarray(arr[i])
+        variants = [g0]
+        if aug:  # templates only: the same wing, tilted at random, are averaged into one descriptor
+            rng = np.random.default_rng(1000 + i)
+            variants += [rotate_small(g0, rng.uniform(-aug["tilt"], aug["tilt"])) for _ in range(aug["copies"])]
+        reps = []
+        for g in variants:
+            ps = all_poses(g)
+            reps.append(np.stack([F.rep_one(ps[p], spec) for p in poses]))
+        out.append(np.mean(reps, axis=0))
     return np.stack(out, axis=1)
 
 
-def reps_of_array(arr_path, n, spec, pool, poses=POSES, chunk=96):
+def reps_of_array(arr_path, n, spec, pool, poses=POSES, chunk=96, aug=None):
     """(len(poses), N, D) descriptors of the pictures stored in an .npy file, computed by the pool."""
-    jobs = [(str(arr_path), spec, s, min(n, s + chunk), poses) for s in range(0, n, chunk)]
+    jobs = [(str(arr_path), spec, s, min(n, s + chunk), poses, aug) for s in range(0, n, chunk)]
     return np.concatenate(pool.map(_rep_job, jobs), axis=1)
 
 

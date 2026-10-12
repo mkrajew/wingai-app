@@ -13,8 +13,8 @@ import numpy as np
 
 import features as F
 from build_sets import TARGET_ANGLE, detilt
-from common import all_poses, fold_of, group_of, luma, shrink
-from config import COUNTRIES, CROPPED, H, POSES, W, WORK
+from common import all_poses, fold_of, group_of, luma, shrink, valid_mask
+from config import COUNTRIES, CROPPED, EVAL, H, POSES, W, WORK
 import evalkit as K
 
 HOLDOUT = 4
@@ -129,15 +129,15 @@ PERTURBATIONS = {
 
 def valid_of(img):
     gray = luma(img)
-    return cv2.resize((gray > 6).astype(np.uint8) * 255, (W, H), interpolation=cv2.INTER_AREA) > 250, gray
+    return valid_mask(gray), gray
 
 
 def job(args):
-    cc, name, angle, hog_spec, ink_spec = args
+    cc, name, angle, methods = args
     img = cv2.imread(str(CROPPED / f"{cc}-wing-images" / name), cv2.IMREAD_COLOR)
     delta = angle - TARGET_ANGLE
     base = detilt(img, delta) if abs(delta) > 0.3 else img
-    reps, inks = {}, {}
+    out = {}
     for pname, fn in PERTURBATIONS.items():
         im = fn(base)
         valid, gray = valid_of(im)
@@ -147,18 +147,28 @@ def job(args):
         else:
             valid, vs = None, {p: None for p in POSES}
         ps = all_poses(g)
-        reps[pname] = np.stack([F.rep_one(ps[p], hog_spec, vs[p]) for p in POSES])
-        inks[pname] = F.ink_stats_for(g, ink_spec, valid)
-    return reps, inks
+        row = {}
+        for m in methods:
+            if m["kind"] == "template":
+                row[m["name"]] = np.stack([F.rep_one(ps[p], m["spec"], vs[p]) for p in POSES])
+            else:
+                row[m["name"]] = F.ink_stats_for(g, m["spec"], valid)
+        out[pname] = row
+    return out
 
 
 def main():
+    import methods as M
+    from rules import ink_views
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=1000)
+    ap.add_argument("--only", default="")
     a = ap.parse_args()
-    fin = json.loads((WORK / "eval" / "finalists.json").read_text(encoding="utf-8"))
-    hog_spec, ink = fin["hog"], fin["ink"]
-    templates = np.load(WORK / "eval" / "templates_hog.npy")
+    methods = M.load()
+    if a.only:
+        methods = [m for m in methods if m["name"] in a.only.split(",")]
+    templates = {m["name"]: np.load(EVAL / f"templates_{m['name']}.npy") for m in methods if m["kind"] == "template"}
     complete = json.loads((WORK / "B" / "complete.json").read_text(encoding="utf-8"))
 
     rng = np.random.default_rng(3)
@@ -171,26 +181,34 @@ def main():
                 items.append((cc, name, float(ang)))
     pick = rng.choice(len(items), min(a.n, len(items)), replace=False)
     items = [items[i] for i in sorted(pick)]
-    print(f"{len(items)} complete holdout wings, {len(PERTURBATIONS)} perturbations each")
+    print(f"{len(items)} complete holdout wings, {len(PERTURBATIONS)} perturbations each, {len(methods)} methods")
 
     with mp.Pool(14) as pool:
-        out = pool.map(job, [(cc, n, an, hog_spec, ink["spec"]) for cc, n, an in items], chunksize=8)
+        out = pool.map(job, [(cc, n, an, methods) for cc, n, an in items], chunksize=6)
 
-    print(f"\n{'perturbation':22s} {'HOG pose':>9s} {'HOG x':>7s} {'HOG y':>7s} {'err':>5s} | {'ink pose':>9s} {'ink err':>7s} | both agree: n  errors")
-    table = {}
+    table = {m["name"]: {} for m in methods}
+    saved = {}
+    for m in methods:
+        name = m["name"]
+        for pname in PERTURBATIONS:
+            if m["kind"] == "template":
+                reps = np.stack([o[pname][name] for o in out], axis=1)  # (4, N, D)
+                pred, margin = K.predict(reps, templates[name])
+            else:
+                pose, mg = K.ink_decision([o[pname][name] for o in out], m["x"], m["y"])
+                pred = ink_views(pose)
+                margin = np.stack([mg] * 4)
+            saved[f"{name}__{pname}__pred"], saved[f"{name}__{pname}__margin"] = pred.astype(np.int8), margin.astype(np.float32)
+            truth = np.arange(4)[:, None] * np.ones_like(pred)
+            table[name][pname] = K.metrics(pred.ravel(), truth.ravel())
+    names = [m["name"] for m in methods]
+    print("\nerrors out of %d decisions (%d wings x 4 poses); the smaller the better" % (4 * len(items), len(items)))
+    print(f"{'perturbation':22s} " + " ".join(f"{n[:17]:>17s}" for n in names))
     for pname in PERTURBATIONS:
-        reps = np.stack([o[0][pname] for o in out], axis=1)  # (4, N, D)
-        pred, margin = K.predict(reps, templates)
-        truth = np.arange(4)[:, None] * np.ones_like(pred)
-        mh = K.metrics(pred.ravel(), truth.ravel())
-        ip, _ = K.ink_decision([o[1][pname] for o in out], ink["x"], ink["y"])
-        # ink statistics are antisymmetric: the canonical wing decides for the four poses
-        mi = K.metrics(ip, np.zeros_like(ip))
-        agree = (pred[0] == ip)
-        n_agree, err_agree = int(agree.sum()), int((agree & (pred[0] != 0)).sum())
-        table[pname] = {"hog": mh, "ink": mi, "agree_n": n_agree, "agree_errors": err_agree}
-        print(f"{pname:22s} {mh['pose'] * 100:8.2f}% {mh['x'] * 100:6.2f}% {mh['y'] * 100:6.2f}% {mh['errors']:5d} | {mi['pose'] * 100:8.2f}% {mi['errors']:7d} | {n_agree:5d} {err_agree:3d}")
-    (WORK / "eval" / "stress_results.json").write_text(json.dumps(table), encoding="utf-8")
+        print(f"{pname:22s} " + " ".join(f"{table[n][pname]['errors']:17d}" for n in names))
+    print(f"{'TOTAL':22s} " + " ".join(f"{sum(table[n][p]['errors'] for p in PERTURBATIONS):17d}" for n in names))
+    (EVAL / "stress_results.json").write_text(json.dumps(table), encoding="utf-8")
+    np.savez_compressed(EVAL / "stress_outputs.npz", **saved)
 
 
 if __name__ == "__main__":

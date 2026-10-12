@@ -1,28 +1,24 @@
-"""Final evaluation of the chosen HOG variant and the chosen ink variant on every set.
+"""Evaluation of every candidate method (methods.py) on every set.
 
-    python tools/pose/evaluate.py [--train-per-country 600]
+    python tools/pose/evaluate.py [--train-per-country 600] [--loco-per-country 400] [--only name,name]
 
-Reads work/eval/finalists.json:  {"hog": {spec}, "ink": {"spec": {...}, "x": "x_thirds", "y": "y_halves"}}
 Templates (the average wing in the four poses) are made from the development folds of set B only (straightened version).
-  B holdout    : the fold 4 of set B, never used for any choice. Two versions: straightened (det) and as in the database (asis).
-  B by country : templates from the other 12 countries, tested on a sample of the left out one.
-  A            : the real crops of the app (backend truth).     A2: the small, already cropped wings of Pulawy (backend truth).
-Writes work/eval/outputs.npz with every prediction and margin, for the rules and the report.
+  Bdet / Basis : the holdout fold 4 of set B, never used for any choice; straightened like a crop of the app / as in the database
+  LOCO         : templates from the other 12 countries, tested on a sample of the left out country (complete wings)
+  A            : the real crops of the app (truth: the backend)        A2: small, already cropped wings of Pulawy (truth: the backend)
+Writes work/eval/results.json (all metrics) and work/eval/outputs.npz (every prediction, for compare.py, rules.py, gallery.py).
 """
 import argparse
 import json
 import multiprocessing as mp
-import sys
 
 import numpy as np
 
 import evalkit as K
 import features as F
-from common import all_poses
-from config import COUNTRIES, POSES, WORK
-
-EVAL = WORK / "eval"
-TRAIN_FOLDS_EXCLUDED = K.HOLDOUT_FOLD
+import methods as M
+from config import COUNTRIES, EVAL, POSES, WORK
+from rules import ink_views
 
 
 def _ink_job(args):
@@ -31,156 +27,152 @@ def _ink_job(args):
     return [F.ink_stats_for(np.asarray(arr[i]), spec) for i in range(s, e)]
 
 
-def ink_of_array(path, n, spec, pool, chunk=128):
-    jobs = [(str(path), spec, s, min(n, s + chunk)) for s in range(0, n, chunk)]
-    return [r for part in pool.map(_ink_job, jobs) for r in part]
+def ink_stats_of_array(path, n, spec, pool, chunk=128):
+    return [r for part in pool.map(_ink_job, [(str(path), spec, s, min(n, s + chunk)) for s in range(0, n, chunk)]) for r in part]
 
 
-def per_country(pred_idx, country, truth_idx=0):
-    out = {}
-    for cc in COUNTRIES:
-        m = country == cc
-        if m.any():
-            out[cc] = K.metrics(pred_idx[m], np.full(int(m.sum()), truth_idx))
-    return out
+def ink_pred(stats, m):
+    pose, margin = K.ink_decision(stats, m["x"], m["y"])
+    return pose, margin
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--train-per-country", type=int, default=600)
-    ap.add_argument("--loco-per-country", type=int, default=500)
+    ap.add_argument("--loco-per-country", type=int, default=400)
+    ap.add_argument("--only", default="")
     a = ap.parse_args()
     EVAL.mkdir(parents=True, exist_ok=True)
-    fin = json.loads((EVAL / "finalists.json").read_text(encoding="utf-8"))
-    hog_spec, ink = fin["hog"], fin["ink"]
+    methods = M.load()
+    if a.only:
+        methods = [m for m in methods if m["name"] in a.only.split(",")]
     complete = json.loads((WORK / "B" / "complete.json").read_text(encoding="utf-8"))
     rng = np.random.default_rng(11)
-    res = {}
-    outputs = {}
+    res, out = {}, {}
+
+    # ------------------------------------------------------------------------------------------------ the sets, written once
+    imgs, names, country, folds = K.load_b("g_det")
+    is_complete = np.array([complete[c][n] >= 0.015 for c, n in zip(country, names)])
+    dev = np.where(folds != K.HOLDOUT_FOLD)[0]
+    train = np.array(sorted(i for cc in COUNTRIES for i in rng.choice(dev[country[dev] == cc], min(a.train_per_country, int((country[dev] == cc).sum())), replace=False)))
+    np.save(EVAL / "train_det.npy", imgs[train])
+    c_train = country[train]
+    hold = np.where(folds == K.HOLDOUT_FOLD)[0]
+    sets = {"Bdet": (EVAL / "hold_det.npy", hold, is_complete[hold], country[hold])}
+    np.save(EVAL / "hold_det.npy", imgs[hold])
+    imgs_asis, *_ = K.load_b("g_asis")
+    np.save(EVAL / "hold_asis.npy", imgs_asis[hold])
+    sets["Basis"] = (EVAL / "hold_asis.npy", hold, is_complete[hold], country[hold])
+    del imgs_asis
+    loco_idx = np.array(sorted(i for cc in COUNTRIES for i in rng.choice(np.where((country == cc) & is_complete)[0], min(a.loco_per_country, int(((country == cc) & is_complete).sum())), replace=False)))
+    np.save(EVAL / "loco.npy", imgs[loco_idx])
+    loco_country = country[loco_idx]
+    del imgs
+    real = K.load_real()
+    small = K.load_pulawy_small() if (WORK / "real" / "labels_pulawy_small.json").exists() else []
+    print(f"train {len(train)} wings, holdout {len(hold)} ({int(is_complete[hold].sum())} complete), loco {len(loco_idx)}, real crops {len(real)}, small Pulawy {len(small)}")
+    truth_real = np.array([POSES.index(r["pose"]) for r in real])
+    strata = {
+        "main sure unflagged": np.array([r["main"] and r["sure"] and not r["check"] for r in real]),
+        "main sure": np.array([r["main"] and r["sure"] for r in real]),
+        "all sure unflagged": np.array([r["sure"] and not r["check"] for r in real]),
+    }
+    for src in ("swietokrzyskie", "bm", "pulawy"):
+        strata[f"main sure unflagged {src}"] = np.array([r["source"] == src and r["main"] and r["sure"] and not r["check"] for r in real])
+    truth_small = np.array([POSES.index(r["pose"]) for r in small]) if small else None
+    sel_small = np.array([r["sure"] and not r["check"] for r in small]) if small else None
 
     with mp.Pool(14) as pool:
-        # ------------------------------------------------------------------------------------------- templates (set B, development folds)
-        imgs, names, country, folds = K.load_b("g_det")
-        dev = np.where(folds != K.HOLDOUT_FOLD)[0]
-        train = []
-        for cc in COUNTRIES:
-            idx = dev[country[dev] == cc]
-            train += list(rng.choice(idx, min(a.train_per_country, len(idx)), replace=False))
-        train = np.array(sorted(train))
-        np.save(EVAL / "train_det.npy", imgs[train])
-        reps_train = K.reps_of_array(EVAL / "train_det.npy", len(train), hog_spec, pool)
-        templates = K.templates_of(reps_train)
-        np.save(EVAL / "templates_hog.npy", templates)
-        print(f"templates from {len(train)} development wings of set B, descriptor length {templates.shape[1]}")
-
-        # ------------------------------------------------------------------------------------------------- B holdout, both versions
-        for key, tag in (("g_det", "B holdout, straightened"), ("g_asis", "B holdout, as in the database")):
-            if key == "g_det":
-                im, nm, cn, fo = imgs, names, country, folds
+        for m in methods:
+            name = m["name"]
+            r = res.setdefault(name, {})
+            print(f"\n=== {name}", flush=True)
+            if m["kind"] == "template":
+                spec = m["spec"]
+                reps_train = K.reps_of_array(EVAL / "train_det.npy", len(train), spec, pool, aug=m.get("aug"))
+                templates = K.templates_of(reps_train)
+                np.save(EVAL / f"templates_{name}.npy", templates)
+                for sname, (path, idx, comp, cn) in sets.items():
+                    reps = K.reps_of_array(path, len(idx), spec, pool)
+                    pred, margin = K.predict(reps, templates)
+                    out[f"{name}__{sname}__pred"], out[f"{name}__{sname}__margin"] = pred, margin
+                    truth = np.arange(4)[:, None] * np.ones_like(pred)
+                    r[sname] = {"complete": K.metrics(pred[:, comp].ravel(), truth[:, comp].ravel()), "all": K.metrics(pred.ravel(), truth.ravel())}
+                    print(f"  {sname:6s} complete: {K.fmt(r[sname]['complete'])}", flush=True)
+                # leave one country out
+                reps = K.reps_of_array(EVAL / "loco.npy", len(loco_idx), spec, pool)
+                lo = {}
+                preds_l = np.zeros(reps.shape[:2], np.int8)
+                margins_l = np.zeros(reps.shape[:2], np.float32)
+                for cc in COUNTRIES:
+                    t = K.templates_of(reps_train[:, c_train != cc])
+                    mask = loco_country == cc
+                    p, mg = K.predict(reps[:, mask], t)
+                    preds_l[:, mask], margins_l[:, mask] = p, mg
+                    lo[cc] = K.metrics(p.ravel(), (np.arange(4)[:, None] * np.ones_like(p)).ravel())
+                out[f"{name}__LOCO__pred"], out[f"{name}__LOCO__margin"] = preds_l, margins_l
+                r["LOCO"] = lo
+                tot_err = sum(v["errors"] for v in lo.values())
+                tot_n = sum(v["n"] for v in lo.values())
+                print(f"  LOCO   errors {tot_err}/{tot_n}; worst country: " + ", ".join(f"{c} {v['pose'] * 100:.2f}%" for c, v in sorted(lo.items(), key=lambda kv: kv[1]['pose'])[:3]), flush=True)
+                # real crops
+                reps_a = K.reps_of_list([x["g"] for x in real], spec, [x["valid"] for x in real])[0]
+                pa, ma = F.decide(F.scores(reps_a, templates))
+                out[f"{name}__A__pred"], out[f"{name}__A__margin"] = pa, ma
+                r["A"] = {s: K.metrics(pa[sel], truth_real[sel]) for s, sel in strata.items()}
+                if small:
+                    reps_s = K.reps_of_list([x["g"] for x in small], spec)[0]
+                    ps_, ms_ = F.decide(F.scores(reps_s, templates))
+                    out[f"{name}__A2__pred"], out[f"{name}__A2__margin"] = ps_, ms_
+                    r["A2"] = K.metrics(ps_[sel_small], truth_small[sel_small])
             else:
-                im, nm, cn, fo = K.load_b(key)
-            hold = np.where(fo == K.HOLDOUT_FOLD)[0]
-            comp = np.array([complete[cn[i]][nm[i]] >= 0.015 for i in hold])
-            path = EVAL / f"hold_{key}.npy"
-            np.save(path, im[hold])
-            reps = K.reps_of_array(path, len(hold), hog_spec, pool)
-            pred, margin = K.predict(reps, templates)
-            truth = np.arange(4)[:, None] * np.ones_like(pred)
-            stats = ink_of_array(path, len(hold), ink["spec"], pool)
-            ipose, imargin = K.ink_decision(stats, ink["x"], ink["y"])
-            res[tag] = {"hog_all": K.metrics(pred.ravel(), truth.ravel()), "hog_complete": K.metrics(pred[:, comp].ravel(), truth[:, comp].ravel()),
-                        "ink_all": K.metrics(ipose, np.zeros_like(ipose)), "ink_complete": K.metrics(ipose[comp], np.zeros(int(comp.sum()), int))}
-            agree = pred[0] == ipose
-            res[tag]["agree"] = {"n": int(agree.sum()), "of": int(agree.size), "errors": int((agree & (pred[0] != 0)).sum()),
-                                 "n_complete": int((agree & comp).sum()), "of_complete": int(comp.sum()), "errors_complete": int((agree & comp & (pred[0] != 0)).sum())}
-            outputs[key] = {"pred": pred, "margin": margin, "ink_pose": ipose, "ink_margin": imargin, "complete": comp, "country": cn[hold]}
-            print(f"\n== {tag}: {len(hold)} wings x 4 poses ({int(comp.sum())} complete)")
-            for k in ("hog_all", "hog_complete", "ink_all", "ink_complete"):
-                print(f"  {k:13s} {K.fmt(res[tag][k])}")
-            print(f"  both agree: {res[tag]['agree']}")
-            print("  HOG per country (all four poses, complete or not):")
-            pc = {}
-            for cc in COUNTRIES:
-                m = cn[hold] == cc
-                if m.any():
-                    pc[cc] = K.metrics(pred[:, m].ravel(), truth[:, m].ravel())
-            res[tag]["hog_by_country"] = pc
-            print("   " + "  ".join(f"{cc} {v['pose'] * 100:.2f}%({v['errors']})" for cc, v in pc.items()))
-            del im
+                spec = m["spec"]
+                for sname, (path, idx, comp, cn) in sets.items():
+                    stats = ink_stats_of_array(path, len(idx), spec, pool)
+                    pose, margin = ink_pred(stats, m)
+                    views = ink_views(pose)
+                    out[f"{name}__{sname}__pred"], out[f"{name}__{sname}__margin"] = views.astype(np.int8), np.stack([margin] * 4).astype(np.float32)
+                    truth = np.arange(4)[:, None] * np.ones_like(views)
+                    r[sname] = {"complete": K.metrics(views[:, comp].ravel(), truth[:, comp].ravel()), "all": K.metrics(views.ravel(), truth.ravel())}
+                    print(f"  {sname:6s} complete: {K.fmt(r[sname]['complete'])}", flush=True)
+                stats = ink_stats_of_array(EVAL / "loco.npy", len(loco_idx), spec, pool)
+                pose, margin = ink_pred(stats, m)
+                lo = {cc: K.metrics(pose[loco_country == cc], np.zeros(int((loco_country == cc).sum()), int)) for cc in COUNTRIES}
+                out[f"{name}__LOCO__pred"] = ink_views(pose).astype(np.int8)
+                out[f"{name}__LOCO__margin"] = np.stack([margin] * 4).astype(np.float32)
+                r["LOCO"] = lo
+                print(f"  LOCO   errors {sum(v['errors'] for v in lo.values())}/{sum(v['n'] for v in lo.values())} wings (canonical view; antisymmetric for the other poses)", flush=True)
+                stats_a = [F.ink_stats_for(x["g"], spec, x["valid"]) for x in real]
+                pa, ma = ink_pred(stats_a, m)
+                out[f"{name}__A__pred"], out[f"{name}__A__margin"] = pa, ma.astype(np.float32)
+                r["A"] = {s: K.metrics(pa[sel], truth_real[sel]) for s, sel in strata.items()}
+                if small:
+                    stats_s = [F.ink_stats_for(x["g"], spec) for x in small]
+                    ps_, ms_ = ink_pred(stats_s, m)
+                    out[f"{name}__A2__pred"], out[f"{name}__A2__margin"] = ps_, ms_.astype(np.float32)
+                    r["A2"] = K.metrics(ps_[sel_small], truth_small[sel_small])
+            for s in ("main sure unflagged", "all sure unflagged"):
+                print(f"  A [{s}]: {K.fmt(r['A'][s])}")
+            if small:
+                print(f"  A2 small Pulawy (sure, not flagged): {K.fmt(r['A2'])}", flush=True)
 
-        # ------------------------------------------------------------------------------------- leave one country out (HOG)
-        print("\n== leave one country out (templates from the other 12 countries; complete wings, a sample of each country):")
-        c_train = country[train]
-        loco = {}
-        for cc in COUNTRIES:
-            others = c_train != cc
-            tmpl = K.templates_of(reps_train[:, others])
-            idx = np.where((country == cc) & np.array([complete[cc][n] >= 0.015 for n in names]))[0]
-            idx = np.sort(rng.choice(idx, min(a.loco_per_country, len(idx)), replace=False))
-            path = EVAL / "loco.npy"
-            np.save(path, imgs[idx])
-            reps = K.reps_of_array(path, len(idx), hog_spec, pool)
-            pred, margin = K.predict(reps, tmpl)
-            truth = np.arange(4)[:, None] * np.ones_like(pred)
-            loco[cc] = K.metrics(pred.ravel(), truth.ravel())
-            print(f"  {cc}: {K.fmt(loco[cc])}")
-        res["leave one country out"] = loco
-
-    # ------------------------------------------------------------------------------------------ A: real crops of the app
-    real = K.load_real()
-    print(f"\n== A: real crops of the app: {len(real)} crops")
-    imgs_real = [r["g"] for r in real]
-    valids = [r["valid"] for r in real]
-    reps_a = K.reps_of_list(imgs_real, hog_spec, valids)[0]  # the crop as it is
-    sc = F.scores(reps_a, templates)
-    best, margin = F.decide(sc)
-    truth = np.array([POSES.index(r["pose"]) for r in real])
-    stats = [F.ink_stats_for(r["g"], ink["spec"], r["valid"]) for r in real]
-    ipose, imargin = K.ink_decision(stats, ink["x"], ink["y"])
-    strata = {
-        "main, sure, not flagged": lambda r: r["main"] and r["sure"] and not r["check"],
-        "main, sure (flagged too)": lambda r: r["main"] and r["sure"],
-        "all detections, sure, not flagged": lambda r: r["sure"] and not r["check"],
-        "all detections, sure": lambda r: r["sure"],
-    }
-    res["A"] = {}
-    for sname, fn in strata.items():
-        sel = np.array([fn(r) for r in real])
-        res["A"][sname] = {"hog": K.metrics(best[sel], truth[sel]), "ink": K.metrics(ipose[sel], truth[sel]),
-                           "agree_n": int((best[sel] == ipose[sel]).sum()), "agree_errors": int(((best[sel] == ipose[sel]) & (best[sel] != truth[sel])).sum())}
-        print(f"  [{sname}]  n={int(sel.sum())}\n     HOG {K.fmt(res['A'][sname]['hog'])}\n     ink {K.fmt(res['A'][sname]['ink'])}\n     agree {res['A'][sname]['agree_n']}, errors among agreeing {res['A'][sname]['agree_errors']}")
-    for src in ("swietokrzyskie", "bm", "pulawy"):
-        sel = np.array([r["source"] == src and r["main"] and r["sure"] and not r["check"] for r in real])
-        res["A"][f"main, sure, not flagged, {src}"] = {"hog": K.metrics(best[sel], truth[sel]), "ink": K.metrics(ipose[sel], truth[sel])}
-        print(f"  [{src}, main, sure, not flagged] n={int(sel.sum())}  HOG errors {res['A'][f'main, sure, not flagged, {src}']['hog']['errors']}  ink errors {res['A'][f'main, sure, not flagged, {src}']['ink']['errors']}")
-    outputs["A"] = {"pred": best, "margin": margin, "ink_pose": ipose, "ink_margin": imargin, "truth": truth, "ids": np.array([r["id"] for r in real]),
-                    "main": np.array([r["main"] for r in real]), "sure": np.array([r["sure"] for r in real]), "check": np.array([r["check"] for r in real]),
-                    "source": np.array([r["source"] for r in real]), "valid_frac": np.array([r["valid_frac"] for r in real])}
-
-    # ---------------------------------------------------------------------------------------------- A2: small Pulawy wings
-    try:
-        small = K.load_pulawy_small()
-    except FileNotFoundError:
-        small = []
+    out["meta__A__ids"] = np.array([x["id"] for x in real])
+    out["meta__A__truth"] = truth_real
+    out["meta__A__main"] = np.array([x["main"] for x in real])
+    out["meta__A__sure"] = np.array([x["sure"] for x in real])
+    out["meta__A__check"] = np.array([x["check"] for x in real])
+    out["meta__A__source"] = np.array([x["source"] for x in real])
     if small:
-        print(f"\n== A2: small, already cropped Pulawy wings: {len(small)}")
-        reps_s = K.reps_of_list([r["g"] for r in small], hog_spec)[0]
-        best_s, margin_s = F.decide(F.scores(reps_s, templates))
-        truth_s = np.array([POSES.index(r["pose"]) for r in small])
-        stats_s = [F.ink_stats_for(r["g"], ink["spec"]) for r in small]
-        ipose_s, imargin_s = K.ink_decision(stats_s, ink["x"], ink["y"])
-        res["A2"] = {}
-        for sname, fn in (("sure, not flagged", lambda r: r["sure"] and not r["check"]), ("sure", lambda r: r["sure"])):
-            sel = np.array([fn(r) for r in small])
-            res["A2"][sname] = {"hog": K.metrics(best_s[sel], truth_s[sel]), "ink": K.metrics(ipose_s[sel], truth_s[sel])}
-            print(f"  [{sname}] n={int(sel.sum())}\n     HOG {K.fmt(res['A2'][sname]['hog'])}\n     ink {K.fmt(res['A2'][sname]['ink'])}")
-        print("  poses of the small wings (backend):", {p: int((truth_s == i).sum()) for i, p in enumerate(POSES)})
-        outputs["A2"] = {"pred": best_s, "margin": margin_s, "ink_pose": ipose_s, "ink_margin": imargin_s, "truth": truth_s,
-                         "sure": np.array([r["sure"] for r in small]), "check": np.array([r["check"] for r in small]), "ids": np.array([r["id"] for r in small])}
-
+        out["meta__A2__truth"] = truth_small
+        out["meta__A2__sure"] = np.array([x["sure"] for x in small])
+        out["meta__A2__check"] = np.array([x["check"] for x in small])
+        out["meta__A2__ids"] = np.array([x["id"] for x in small])
+    for sname, (path, idx, comp, cn) in sets.items():
+        out[f"meta__{sname}__complete"] = comp
+        out[f"meta__{sname}__country"] = cn
+    out["meta__LOCO__country"] = loco_country
     (EVAL / "results.json").write_text(json.dumps(res, default=str), encoding="utf-8")
-    flat = {f"{k}__{kk}": v for k, d in outputs.items() for kk, v in d.items()}
-    np.savez_compressed(EVAL / "outputs.npz", **flat)
+    np.savez_compressed(EVAL / "outputs.npz", **out)
     print("\nsaved results.json and outputs.npz in", EVAL)
 
 

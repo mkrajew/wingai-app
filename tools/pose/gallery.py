@@ -1,16 +1,16 @@
-"""Contact sheets of the wrong decisions, to look at them with human eyes.
+"""Contact sheets of the wrong decisions of one method, to look at them with human eyes.
 
-    python tools/pose/gallery.py        reads work/eval/outputs.npz, writes work/eval/gallery_*.png
+    python tools/pose/gallery.py --method hog-16x6-b8s        reads work/eval/outputs.npz, writes work/eval/gallery_<method>_*.png
 Every tile is the picture as the method saw it (shrunk), with the shown pose, the decided pose and the margin.
 """
+import argparse
+
 import cv2
 import numpy as np
 
 import evalkit as K
 from common import turn
-from config import POSES, WORK
-
-EVAL = WORK / "eval"
+from config import EVAL, POSES, WORK
 
 
 def sheet(tiles, path, cols=4):
@@ -35,27 +35,28 @@ def tile(gray, text):
 
 
 def main(limit=48):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--method", required=True)
+    a = ap.parse_args()
+    n = a.method
     z = np.load(EVAL / "outputs.npz", allow_pickle=True)
-    for key in ("g_det", "g_asis"):
-        if f"{key}__pred" not in z:
-            continue
-        pred, margin, comp, country = z[f"{key}__pred"], z[f"{key}__margin"], z[f"{key}__complete"], z[f"{key}__country"]
-        imgs = np.load(EVAL / f"hold_{key}.npy", mmap_mode="r")
+    for sname, arr in (("Bdet", "hold_det.npy"), ("Basis", "hold_asis.npy")):
+        pred, margin, comp, country = z[f"{n}__{sname}__pred"], z[f"{n}__{sname}__margin"], z[f"meta__{sname}__complete"], z[f"meta__{sname}__country"]
+        imgs = np.load(EVAL / arr, mmap_mode="r")
         wrong = [(p, i) for p in range(4) for i in range(pred.shape[1]) if comp[i] and pred[p, i] != p]
         wrong.sort(key=lambda t: -margin[t[0], t[1]])  # the most confident mistakes first
         tiles = [tile(np.ascontiguousarray(turn(np.asarray(imgs[i]), POSES[p])), f"{country[i]} shown {POSES[p]} -> {POSES[pred[p, i]]} m={margin[p, i]:.2f}") for p, i in wrong[:limit]]
-        sheet(tiles, EVAL / f"gallery_B_{key}.png")
-        print(f"  B {key}: {len(wrong)} wrong decisions on complete wings")
-    if "A__pred" in z:
-        pred, margin, truth, ids = z["A__pred"], z["A__margin"], z["A__truth"], z["A__ids"]
-        sure = z["A__sure"]
-        wrong = [i for i in range(len(pred)) if pred[i] != truth[i]]
-        tiles = []
-        for i in wrong[:limit]:
-            g, _ = K.real_gray(WORK / "real" / f"{ids[i]}.png")
-            tiles.append(tile(g, f"{ids[i][:14]} truth {POSES[truth[i]]} -> {POSES[pred[i]]} m={margin[i]:.2f}{'' if sure[i] else ' unsure label'}"))
-        sheet(tiles, EVAL / "gallery_A.png")
-        print(f"  A: {len(wrong)} wrong decisions")
+        print(f"{sname}: {len(wrong)} wrong decisions on complete wings")
+        sheet(tiles, EVAL / f"gallery_{n}_{sname}.png")
+    pred, margin, truth, ids = z[f"{n}__A__pred"], z[f"{n}__A__margin"], z["meta__A__truth"], z["meta__A__ids"]
+    sure, check = z["meta__A__sure"], z["meta__A__check"]
+    wrong = [i for i in range(len(pred)) if pred[i] != truth[i]]
+    tiles = []
+    for i in wrong[:limit]:
+        g, _ = K.real_gray(WORK / "real" / f"{ids[i]}.png")
+        tiles.append(tile(g, f"{ids[i][:14]} truth {POSES[truth[i]]} -> {POSES[pred[i]]} m={margin[i]:.2f}{'' if sure[i] else ' angle unsure'}{' flagged' if check[i] else ''}"))
+    print(f"A: {len(wrong)} wrong decisions")
+    sheet(tiles, EVAL / f"gallery_{n}_A.png")
 
 
 if __name__ == "__main__":

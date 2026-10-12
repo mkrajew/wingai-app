@@ -18,6 +18,8 @@ BACKEND_URL = os.environ.get("WINGAI_BACKEND", "http://127.0.0.1:8000")
 
 # Big generated files (git-ignored)
 WORK = Path(os.environ.get("POSE_WORK", Path(__file__).resolve().parent / "work"))
+# Results of the final evaluation. Set POSE_EVAL to a folder name to keep several candidates side by side (work/eval/<name>).
+EVAL = WORK / "eval" / os.environ["POSE_EVAL"] if os.environ.get("POSE_EVAL") else WORK / "eval"
 
 # The working size of a wing picture. A crop is shrunk to this before anything is measured. 256 x 96 is
 # divisible by the cell sizes that are tried (8, 16, 32 px), so a flip of the picture is an exact permutation of the cells.
