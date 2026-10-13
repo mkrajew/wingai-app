@@ -32,7 +32,12 @@ import { orientCanvas, orientImage } from "./utils/orientPicture";
 import type { PoseReading, WingSide } from "./utils/poseFromPixels";
 import { mainDetectionIndex } from "./utils/mainDetection";
 import { mapWithConcurrency, runPipeline } from "./utils/async";
-import { newImageId, patchImageById } from "./utils/imageState";
+import {
+  applyDetections,
+  newImageId,
+  patchImageById,
+  photosLoading,
+} from "./utils/imageState";
 import {
   DEFAULT_WING_OPTIONS,
   chooseModel,
@@ -60,6 +65,10 @@ export type ImageFile = {
   file: File;
   previewUrl: string;
   thumbUrl?: string;
+  // The thumbnail could not be made, or the size could not be read (the picture cannot be decoded). The photo is
+  // then done with loading, see photosLoading.
+  thumbFailed?: boolean;
+  dimensionsFailed?: boolean;
   status: "new" | "uploading" | "edit" | "done" | "error";
   vector?: number[];
   check?: boolean;
@@ -307,11 +316,17 @@ function App() {
     setDetection({ inProgress: true, completed: 0, total: toDetect.length });
     setDetectionError(null);
     try {
-      const detectionMap = new Map<string, ImageFile>();
+      const detectionMap = new Map<
+        string,
+        { previewUrl: string; detections: Detection[] }
+      >();
       for (const img of toDetect) {
         try {
           const dets = await detectFromUrl(img.previewUrl);
-          detectionMap.set(img.filename, { ...img, detections: dets });
+          detectionMap.set(img.filename, {
+            previewUrl: img.previewUrl,
+            detections: dets,
+          });
         } catch (err) {
           const message = err instanceof Error ? err.message : "Unknown error";
           if (detectionMap.size === 0) {
@@ -325,7 +340,8 @@ function App() {
           }));
         }
       }
-      setImageFiles((prev) => prev.map((img) => detectionMap.get(img.filename) ?? img));
+      // Into the photos as they are now: while Detect ran they got their thumbnails and sizes.
+      setImageFiles((prev) => applyDetections(prev, detectionMap));
     } finally {
       setDetection((prev) => ({ ...prev, inProgress: false }));
     }
@@ -395,6 +411,8 @@ function App() {
                 file: newFile,
                 previewUrl: newPreviewUrl,
                 thumbUrl: undefined,
+                thumbFailed: undefined,
+                dimensionsFailed: undefined,
                 width,
                 height,
                 detections: undefined,
@@ -1026,6 +1044,8 @@ function App() {
   }
 
   async function processImages() {
+    // The button is disabled for the same reasons; this is for any other way in.
+    if (detection.inProgress || photosLoading(imageFiles)) return;
     const toProcess = imageFiles.filter((f) => !f.skipProcessing);
     if (toProcess.length === 0) return;
 
@@ -1106,6 +1126,13 @@ function App() {
         })
         .catch((error) => {
           console.warn("Failed to read image dimensions.", filename, error);
+          setImageFiles((prevFiles) =>
+            prevFiles.map((item) =>
+              item.previewUrl === previewUrl
+                ? { ...item, dimensionsFailed: true }
+                : item,
+            ),
+          );
         });
     }
   }, [imageFiles]);
@@ -1142,6 +1169,11 @@ function App() {
         });
       } catch (error) {
         console.warn("Failed to generate thumbnail.", error);
+        setImageFiles((prevFiles) =>
+          prevFiles.map((f) =>
+            f.previewUrl === previewUrl ? { ...f, thumbFailed: true } : f,
+          ),
+        );
       }
     });
   }, [imageFiles, step]);

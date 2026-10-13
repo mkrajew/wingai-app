@@ -72,7 +72,7 @@ Among 5 104 well cut wings that the detector found in all four poses (real photo
 1. Open the page and drop your wing photos.
 2. Optional: open **Detection model** in the header, click **Load model**, and click **Detect**. Open a preview to choose the box that the app crops, or click **Extract wings** to split a photo with several wings.
 3. Pick the **Model** and the **Orientation** in the header. The `precise` model works with the original orientation and with the orientation to the right. To orient the wings to the left, use the `rotation` model.
-4. Click **Process**.
+4. Click **Process**. The button is grey while the photos are still getting their thumbnails (a small spinner shows it) and while Detect runs, and it becomes active by itself.
 5. Check the results. Wings flagged for review appear in a list at the top. Drag a point to move it.
 6. Click **Generate data** and download the CSV, the ZIP, or both.
 

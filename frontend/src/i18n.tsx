@@ -34,6 +34,8 @@ export type Translations = {
   uploadedImages: (count: number) => string;
   typeToFilter: string;
   process: string;
+  processWaitsForPhotos: string;
+  processWaitsForDetect: string;
   preview: string;
   clear: string;
   detect: string;
@@ -135,7 +137,9 @@ const en: Translations = {
   uploadedImages: (n) => `Uploaded ${n} ${n === 1 ? "image" : "images"}:`,
   typeToFilter: "Type to filter...",
   process: "Process",
-  preview: "Preview",
+  processWaitsForPhotos: "The photos are still loading...",
+  processWaitsForDetect: "Wait until Detect has finished...",
+preview: "Preview",
   clear: "Clear",
   detect: "Detect",
   detectionFailed: (e) => `Detection failed: ${e}`,
@@ -301,7 +305,9 @@ const pl: Translations = {
   },
   typeToFilter: "Filtruj...",
   process: "Przetwórz",
-  preview: "Podgląd",
+  processWaitsForPhotos: "Zdjęcia jeszcze się ładują...",
+  processWaitsForDetect: "Poczekaj, aż Detect się skończy...",
+preview: "Podgląd",
   clear: "Wyczyść",
   detect: "Wykryj",
   detectionFailed: (e) => `Wykrywanie nie powiodło się: ${e}`,
