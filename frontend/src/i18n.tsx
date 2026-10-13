@@ -1,5 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import { createContext, useContext } from "react";
 
 export type Lang = "EN" | "PL";
 
@@ -430,7 +429,7 @@ const pl: Translations = {
   ],
 };
 
-const TRANSLATIONS: Record<Lang, Translations> = { EN: en, PL: pl };
+export const TRANSLATIONS: Record<Lang, Translations> = { EN: en, PL: pl };
 
 type LanguageContextValue = {
   lang: Lang;
@@ -438,36 +437,24 @@ type LanguageContextValue = {
   t: Translations;
 };
 
-const LanguageContext = createContext<LanguageContextValue>({
+// The provider is in LanguageProvider.tsx: a file that exports a component must export nothing else, or Fast
+// Refresh reloads the whole page when it is edited.
+export const LanguageContext = createContext<LanguageContextValue>({
   lang: "EN",
   setLang: () => {},
   t: en,
 });
 
-const LANG_STORAGE_KEY = "wingai-lang";
+export const LANG_STORAGE_KEY = "wingai-lang";
 
 function isLang(value: unknown): value is Lang {
   return value === "EN" || value === "PL";
 }
 
-function getInitialLang(): Lang {
+export function getInitialLang(): Lang {
   if (typeof window === "undefined") return "EN";
   const stored = window.localStorage.getItem(LANG_STORAGE_KEY);
   return isLang(stored) ? stored : "EN";
-}
-
-export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>(getInitialLang);
-
-  useEffect(() => {
-    window.localStorage.setItem(LANG_STORAGE_KEY, lang);
-  }, [lang]);
-
-  return (
-    <LanguageContext.Provider value={{ lang, setLang, t: TRANSLATIONS[lang] }}>
-      {children}
-    </LanguageContext.Provider>
-  );
 }
 
 export function useT() {

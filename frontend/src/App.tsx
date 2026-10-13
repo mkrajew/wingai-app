@@ -1146,15 +1146,6 @@ function App() {
 
   useEffect(() => {
     return () => {
-      imageFiles.forEach((it) => {
-        URL.revokeObjectURL(it.previewUrl);
-        if (it.thumbUrl) URL.revokeObjectURL(it.thumbUrl);
-      });
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
       if (downloadNoticeTimeout.current !== null) {
         window.clearTimeout(downloadNoticeTimeout.current);
       }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { ImageFile } from "../App";
 import { useDropzone } from "react-dropzone";
 import { formatBytes } from "../utils";
@@ -60,12 +60,11 @@ function UploadImages({
         : image.filename.toLowerCase().includes(normalizedFilter),
     );
 
-  useEffect(() => {
-    if (previewIndex === null) return;
-    if (previewIndex >= images.length) {
-      setPreviewIndex(null);
-    }
-  }, [images.length, previewIndex]);
+  // The photo that is shown in the preview window is gone: close the window. Done while rendering, so the window
+  // is never drawn with an index that is past the end of the list.
+  if (previewIndex !== null && previewIndex >= images.length) {
+    setPreviewIndex(null);
+  }
 
   return (
     <>
