@@ -186,6 +186,7 @@
   const longTasks = [];
   let observer = null;
   try { observer = new PerformanceObserver((list) => { for (const e of list.getEntries()) longTasks.push(e.duration); }); observer.observe({ entryTypes: ["longtask"] }); } catch { /* not supported */ }
+  await waitFor(() => btn("Process") && !btn("Process").disabled, "Process is enabled (the photos are loaded and Detect is over)");
   const t0 = performance.now();
   window.__runStage = "processing";
   btn("Process").click();
@@ -207,6 +208,7 @@
     await ticks(60);
     uploads.length = 0; answers.length = 0; errors.length = 0; warnings.length = 0;
     window.__runStage = "processing again after the abort";
+    await waitFor(() => btn("Process") && !btn("Process").disabled, "Process is enabled (the photos are loaded and Detect is over)");
     btn("Process").click();
   }
   let firstHref = null, barSeen = false;

@@ -124,6 +124,17 @@ node tools/regression/compare-trace.mjs main-1 branch-1     # exit code 0: every
 `review-bench.js` counts, for the same kinds of events, the commits of React and the renders of the review screen, from what the dev build of React 19 writes with
 `console.timeStamp`. A stopwatch is useless in a hidden pane (it depends on whether the window draws frames), the counts are not. Run it after `run.js` like `review-trace.js`.
 
+## Process waits for the photos and for Detect (`process-wait.js`)
+
+`process-wait.js` runs on its own in a freshly loaded page, with the helper server and the recorded answers of the backend of the previous section (no backend). It uploads
+eight photos and a file that is not a picture and watches the Process button: it has to be disabled, with a spinner and a hint, until every thumbnail and size has come (the
+broken file gets neither and must not hold it back); then Detect is started at once, while the photos are still loading, and Process has to be disabled the whole time and every
+photo that can be read has to keep its thumbnail; then Process and Edit (the list is back with every thumbnail); a flip in the preview window (Process waits for the new
+thumbnail); and the hint in Polish. The result is `work/collected-process-wait-<label>.json`. On the code from before the change (`lint-fixes`) it shows Process enabled at
+once, no thumbnails when Process can be clicked, and thumbnails that are lost to Detect and never come back (6 of 8 after Edit).
+
+`run.js` and `e2e-orientation.js` wait for an enabled Process button before they click it.
+
 ## Notes for working in the Browser pane
 
 * A hidden pane waits about a second in every `canvas.toBlob`, and `img.decode()` never settles there: use `onload`. The tool gives a script 45 seconds,

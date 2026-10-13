@@ -135,6 +135,7 @@
   await ticks(40);
   const switchState = radio(label).getAttribute("aria-checked");
   if (BREAK) HTMLCanvasElement.prototype.toBlob = function (cb) { cb(null); };
+  await waitFor(() => btn("Process") && !btn("Process").disabled, "Process is enabled (the photos are loaded and Detect is over)");
   btn("Process").click();
   await waitFor(() => answers.filter((a) => a.round === 1).length === files.length, "answers");
   await waitFor(() => { const b = btn("Generate data"); return b && !b.disabled; }, "review ready");
@@ -221,6 +222,7 @@
   await waitFor(() => btn("Process"), "back on the upload screen");
   await ticks(60);
   round = 2;
+  await waitFor(() => btn("Process") && !btn("Process").disabled, "Process is enabled (the photos are loaded and Detect is over)");
   btn("Process").click();
   await waitFor(() => answers.filter((a) => a.round === 2).length === files.length, "second answers");
   let same2 = 0, differ2 = [];
