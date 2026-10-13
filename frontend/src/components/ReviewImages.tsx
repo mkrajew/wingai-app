@@ -8,6 +8,14 @@ import {
   fromSvg,
   toSvg,
 } from "../utils/landmarks";
+import {
+  INITIAL_VIEW,
+  dragView,
+  viewGeometry,
+  viewOrigin,
+  wheelView,
+  zoomView,
+} from "../utils/viewport";
 import ConfirmDialog from "./ConfirmDialog";
 
 type ReviewImagesProps = {
@@ -27,8 +35,12 @@ type ReviewImagesProps = {
   onBackToEdit: () => void;
   onReset: () => void;
   onDownloadNotice: () => void;
-  editConfirmTrigger: number;
-  resetConfirmTrigger: number;
+  // The two confirmation dialogs are opened from here and from App (the back button of the browser, the logo), so
+  // App keeps whether they are open.
+  isEditConfirmOpen: boolean;
+  isResetConfirmOpen: boolean;
+  onEditConfirmOpenChange: (open: boolean) => void;
+  onResetConfirmOpenChange: (open: boolean) => void;
 };
 
 export default function ReviewImages(props: ReviewImagesProps) {
@@ -57,26 +69,48 @@ function ReviewImagesContent({
   onBackToEdit,
   onReset,
   onDownloadNotice,
-  editConfirmTrigger,
-  resetConfirmTrigger,
+  isEditConfirmOpen,
+  isResetConfirmOpen,
+  onEditConfirmOpenChange,
+  onResetConfirmOpenChange,
 }: ReviewImagesContentProps) {
   const t = useT();
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [renameValue, setRenameValue] = useState("");
+  const [renameValue, setRenameValue] = useState(image.filename);
+  // The name that the field was last set from.
+  const [renamedFrom, setRenamedFrom] = useState(image.filename);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const activeItemRef = useRef<HTMLButtonElement | null>(null);
   const zoomInputRef = useRef<HTMLInputElement | null>(null);
   const [svgScale, setSvgScale] = useState(1);
-  const [zoom, setZoom] = useState(1);
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  // The zoom and the pan are changed together, so that the pan always stays inside the picture.
+  const [view, setView] = useState(INITIAL_VIEW);
+  const { zoom, pan: panOffset } = view;
   const [isPanning, setIsPanning] = useState(false);
+  // The photo and the picture that the zoom and the pan belong to.
+  const [shownPhoto, setShownPhoto] = useState({
+    index,
+    previewUrl: image.previewUrl,
+  });
   const [isGenerateOpen, setIsGenerateOpen] = useState(false);
-  const [isEditConfirmOpen, setIsEditConfirmOpen] = useState(false);
-  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [exportMetadata, setExportMetadata] = useState(true);
   const [exportCsv, setExportCsv] = useState(false);
   const disableActions = isProcessing;
+
+  // The name in the field follows the name of the photo, also when the name changes while the photo is open.
+  if (renamedFrom !== image.filename) {
+    setRenamedFrom(image.filename);
+    setRenameValue(image.filename);
+  }
+
+  // Another photo, or the picture of the open photo is replaced (the crop arrives): the old zoom and pan were set on
+  // another picture, so start again from the whole picture.
+  if (shownPhoto.index !== index || shownPhoto.previewUrl !== image.previewUrl) {
+    setShownPhoto({ index, previewUrl: image.previewUrl });
+    setView(INITIAL_VIEW);
+    setIsPanning(false);
+  }
   const handleToggleMetadata = (checked: boolean) => {
     if (checked) {
       setExportMetadata(true);
@@ -140,16 +174,9 @@ function ReviewImagesContent({
   const viewHeight = image.height ?? 0;
   const hasVector = image.vector && image.vector.length === 38;
   const canRender = viewWidth > 0 && viewHeight > 0;
-  const zoomedWidth = viewWidth / zoom;
-  const zoomedHeight = viewHeight / zoom;
-  const zoomedX = (viewWidth - zoomedWidth) / 2;
-  const zoomedY = (viewHeight - zoomedHeight) / 2;
-  const maxPanX = Math.max(0, viewWidth - zoomedWidth);
-  const maxPanY = Math.max(0, viewHeight - zoomedHeight);
-  const clamp = (value: number, min: number, max: number) =>
-    Math.min(max, Math.max(min, value));
-  const viewBoxX = clamp(zoomedX + panOffset.x, 0, maxPanX);
-  const viewBoxY = clamp(zoomedY + panOffset.y, 0, maxPanY);
+  const geometry = viewGeometry(viewWidth, viewHeight, zoom);
+  const { zoomedWidth, zoomedHeight } = geometry;
+  const { x: viewBoxX, y: viewBoxY } = viewOrigin(geometry, panOffset);
   const safeScale = svgScale > 0 ? svgScale : 1;
   const pointRadius = 7 / safeScale;
   const circleStroke = 1 / safeScale;
@@ -171,30 +198,12 @@ function ReviewImagesContent({
   };
 
   useEffect(() => {
-    setRenameValue(image?.filename ?? "");
-  }, [image?.filename]);
-
-  useEffect(() => {
     if (!image?.check) return;
     onClearCheck(index);
   }, [image?.check, index, onClearCheck]);
 
+  // The zoom field gives up the focus when the photo, or its picture, changes.
   useEffect(() => {
-    if (editConfirmTrigger === 0) return;
-    setIsEditConfirmOpen(true);
-  }, [editConfirmTrigger]);
-
-  useEffect(() => {
-    if (resetConfirmTrigger === 0) return;
-    setIsResetConfirmOpen(true);
-  }, [resetConfirmTrigger]);
-
-  // Also when the picture of the open photo is replaced (the crop arrives), because the old zoom and pan
-  // were set on another picture.
-  useEffect(() => {
-    setZoom(1);
-    setPanOffset({ x: 0, y: 0 });
-    setIsPanning(false);
     zoomInputRef.current?.blur();
   }, [index, image.previewUrl]);
 
@@ -224,20 +233,12 @@ function ReviewImagesContent({
     const handleWheel = (event: WheelEvent) => {
       if (!event.ctrlKey) return;
       event.preventDefault();
-      const delta = -event.deltaY * 0.002;
-      setZoom((prev) => Math.min(3, Math.max(1, prev + delta)));
+      const { deltaY } = event;
+      setView((prev) => wheelView(prev, deltaY, viewWidth, viewHeight));
     };
     svg.addEventListener("wheel", handleWheel, { passive: false });
     return () => svg.removeEventListener("wheel", handleWheel);
-  }, [canRender]);
-
-  useEffect(() => {
-    setPanOffset((prev) => {
-      const nextX = clamp(zoomedX + prev.x, 0, maxPanX) - zoomedX;
-      const nextY = clamp(zoomedY + prev.y, 0, maxPanY) - zoomedY;
-      return { x: nextX, y: nextY };
-    });
-  }, [zoomedX, zoomedY, maxPanX, maxPanY]);
+  }, [canRender, viewWidth, viewHeight]);
 
   const commitRename = () => {
     if (!image) return;
@@ -425,7 +426,7 @@ function ReviewImagesContent({
             <button
               type="button"
               className="btn btn-outline-secondary btn-sm"
-              onClick={() => setIsEditConfirmOpen(true)}
+              onClick={() => onEditConfirmOpenChange(true)}
               disabled={disableActions}
             >
               {t.edit}
@@ -433,7 +434,7 @@ function ReviewImagesContent({
             <button
               type="button"
               className="btn btn-outline-secondary btn-sm"
-              onClick={() => setIsResetConfirmOpen(true)}
+              onClick={() => onResetConfirmOpenChange(true)}
             >
               {t.reset}
             </button>
@@ -495,11 +496,7 @@ function ReviewImagesContent({
                   if (!isPanning) return;
                   const deltaX = event.movementX / safeScale;
                   const deltaY = event.movementY / safeScale;
-                  setPanOffset((prev) => {
-                    const nextX = clamp(zoomedX + prev.x - deltaX, 0, maxPanX);
-                    const nextY = clamp(zoomedY + prev.y - deltaY, 0, maxPanY);
-                    return { x: nextX - zoomedX, y: nextY - zoomedY };
-                  });
+                  setView((prev) => dragView(prev, deltaX, deltaY, geometry));
                 }}
                 onPointerUp={(event) => {
                   setDragIndex(null);
@@ -610,7 +607,10 @@ function ReviewImagesContent({
               max={3}
               step={0.1}
               value={zoom}
-              onChange={(event) => setZoom(Number(event.target.value))}
+              onChange={(event) => {
+                const nextZoom = Number(event.target.value);
+                setView((prev) => zoomView(prev, nextZoom, viewWidth, viewHeight));
+              }}
               onPointerUp={(event) => event.currentTarget.blur()}
               ref={zoomInputRef}
             />
@@ -850,10 +850,10 @@ function ReviewImagesContent({
           cancelLabel={t.cancel}
           closeLabel={t.close}
           onConfirm={() => {
-            setIsEditConfirmOpen(false);
+            onEditConfirmOpenChange(false);
             onBackToEdit();
           }}
-          onCancel={() => setIsEditConfirmOpen(false)}
+          onCancel={() => onEditConfirmOpenChange(false)}
         />
       )}
 
@@ -865,10 +865,10 @@ function ReviewImagesContent({
           cancelLabel={t.cancel}
           closeLabel={t.close}
           onConfirm={() => {
-            setIsResetConfirmOpen(false);
+            onResetConfirmOpenChange(false);
             onReset();
           }}
-          onCancel={() => setIsResetConfirmOpen(false)}
+          onCancel={() => onResetConfirmOpenChange(false)}
         />
       )}
     </div>

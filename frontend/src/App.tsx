@@ -133,8 +133,10 @@ function App() {
   // The header's Model and Orientation switches; chooseModel / chooseOrientation
   // keep them consistent. Both are read once, when Process is clicked.
   const [wingOptions, setWingOptions] = useState(DEFAULT_WING_OPTIONS);
-  const [editConfirmTrigger, setEditConfirmTrigger] = useState(0);
-  const [resetConfirmTrigger, setResetConfirmTrigger] = useState(0);
+  // The two confirmation dialogs of the review screen. They are opened from the review screen and from here (the back
+  // button of the browser, the logo), so they are kept here.
+  const [isEditConfirmOpen, setIsEditConfirmOpen] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isUploadResetConfirmOpen, setIsUploadResetConfirmOpen] = useState(false);
   const downloadNoticeTimeout = useRef<number | null>(null);
   const dimensionsRequestedRef = useRef(new Set<string>());
@@ -294,8 +296,8 @@ function App() {
     }
     setStep("upload");
     setReviewIndex(0);
-    setEditConfirmTrigger(0);
-    setResetConfirmTrigger(0);
+    setIsEditConfirmOpen(false);
+    setIsResetConfirmOpen(false);
   }
 
   async function handleDetect() {
@@ -1065,8 +1067,8 @@ function App() {
     setUploadSnapshot(null);
     setStep("upload");
     setReviewIndex(0);
-    setEditConfirmTrigger(0);
-    setResetConfirmTrigger(0);
+    setIsEditConfirmOpen(false);
+    setIsResetConfirmOpen(false);
   }
 
   useEffect(() => {
@@ -1163,7 +1165,7 @@ function App() {
       if (step !== "review") return;
       // Re-push so the back button still works if the user cancels the dialog.
       history.pushState({ wingaiStep: "review" }, "");
-      setEditConfirmTrigger((n) => n + 1);
+      setIsEditConfirmOpen(true);
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
@@ -1230,7 +1232,7 @@ function App() {
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center" }}
             onClick={
               step === "review"
-                ? () => setResetConfirmTrigger((n) => n + 1)
+                ? () => setIsResetConfirmOpen(true)
                 : imageFiles.length > 0
                   ? () => setIsUploadResetConfirmOpen(true)
                   : resetAll
@@ -1368,8 +1370,10 @@ function App() {
             onReset={resetAll}
             onClearCheck={clearCheckForIndex}
             onDownloadNotice={triggerDownloadNotice}
-            editConfirmTrigger={editConfirmTrigger}
-            resetConfirmTrigger={resetConfirmTrigger}
+            isEditConfirmOpen={isEditConfirmOpen}
+            isResetConfirmOpen={isResetConfirmOpen}
+            onEditConfirmOpenChange={setIsEditConfirmOpen}
+            onResetConfirmOpenChange={setIsResetConfirmOpen}
           />
         )}
         <footer className="mt-4 text-center text-muted small">
