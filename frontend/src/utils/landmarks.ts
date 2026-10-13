@@ -26,6 +26,31 @@ const TIE_NUDGE = 1e-9;
  */
 export type Turn = { mirror: boolean; rotate: boolean };
 
+/** The axes a turn flips: a mirror flips the columns, a turn by 180 degrees flips both, and both together flip the rows. */
+export function turnFlips(turn: Turn) {
+  return { flipX: turn.mirror !== turn.rotate, flipY: turn.rotate };
+}
+
+/**
+ * The matrix (a, b, c, d, e, f of CanvasRenderingContext2D.setTransform) that draws a picture of the given
+ * size turned. It holds whole numbers only, so the pixels are moved and nothing is resampled.
+ */
+export function turnMatrix(
+  turn: Turn,
+  width: number,
+  height: number,
+): [number, number, number, number, number, number] {
+  const { flipX, flipY } = turnFlips(turn);
+  return [
+    flipX ? -1 : 1,
+    0,
+    0,
+    flipY ? -1 : 1,
+    flipX ? width : 0,
+    flipY ? height : 0,
+  ];
+}
+
 /**
  * The landmarks (x1, y1, x2, y2, ...) of the same picture after a turn. Pixel c of a row that is `width`
  * pixels wide becomes pixel width - 1 - c, and likewise for the rows, so every landmark stays on the
@@ -40,8 +65,7 @@ export function turnLandmarks(
   height: number,
   turn: Turn,
 ) {
-  const flipX = turn.mirror !== turn.rotate;
-  const flipY = turn.rotate;
+  const { flipX, flipY } = turnFlips(turn);
   return vector.map((value, i) => {
     const isX = i % 2 === 0;
     if (!(isX ? flipX : flipY) || !Number.isFinite(value)) return value;

@@ -5,7 +5,7 @@
  * lives in one place and can be reused.
  */
 
-import type { Turn } from "./landmarks";
+import { turnMatrix, type Turn } from "./landmarks";
 
 export function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
@@ -62,16 +62,7 @@ export async function renderTransformedImage(
 
   if (transform.type === "turn") {
     // An exact permutation of the pixels: a matrix of whole numbers, so nothing is resampled.
-    const flipX = transform.mirror !== transform.rotate;
-    const flipY = transform.rotate;
-    ctx.setTransform(
-      flipX ? -1 : 1,
-      0,
-      0,
-      flipY ? -1 : 1,
-      flipX ? canvas.width : 0,
-      flipY ? canvas.height : 0,
-    );
+    ctx.setTransform(...turnMatrix(transform, canvas.width, canvas.height));
   } else if (transform.type === "flip") {
     if (transform.axis === "horizontal") {
       ctx.translate(canvas.width, 0);
@@ -91,6 +82,27 @@ export async function renderTransformedImage(
 
   const blob = await canvasToBlob(canvas, mimeType, quality);
   return { blob, width: canvas.width, height: canvas.height };
+}
+
+/**
+ * A new canvas with `source` (an image, a bitmap or a canvas) drawn turned: mirrored horizontally, turned by
+ * 180 degrees, or both (mirrored vertically). `width` and `height` are the size of the source in pixels (the
+ * natural size of an image). The pixels only move, none of them changes.
+ */
+export function turnedCanvas(
+  source: CanvasImageSource,
+  width: number,
+  height: number,
+  turn: Turn,
+): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get canvas context");
+  ctx.setTransform(...turnMatrix(turn, width, height));
+  ctx.drawImage(source, 0, 0);
+  return canvas;
 }
 
 /**

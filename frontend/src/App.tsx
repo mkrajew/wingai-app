@@ -28,6 +28,8 @@ import {
 } from "./utils/image";
 import type { ImageTransform } from "./utils/image";
 import { straightenedCrop } from "./utils/obbCrop";
+import { orientCanvas, orientImage } from "./utils/orientPicture";
+import type { PoseReading, WingSide } from "./utils/poseFromPixels";
 import { mainDetectionIndex } from "./utils/mainDetection";
 import { mapWithConcurrency, runPipeline } from "./utils/async";
 import { newImageId, patchImageById } from "./utils/imageState";
@@ -36,9 +38,13 @@ import {
   chooseModel,
   chooseOrientation,
   needsMirroring,
-  orientationToApply,
+  planRequest,
 } from "./utils/wingOptions";
-import type { WingModel, WingOptions } from "./utils/wingOptions";
+import type {
+  WingModel,
+  WingOptions,
+  WingOrientation,
+} from "./utils/wingOptions";
 import { clampToImage, turnLandmarks } from "./utils/landmarks";
 import { needsRotation } from "./utils/wingPose";
 import { useT } from "./i18n";
@@ -75,10 +81,16 @@ type PreparedImage = {
   height: number | undefined;
   // The picture is a crop, so the screen can show it right away.
   cropped: boolean;
+  // How the pose of the wing was read from the pixels of the picture, when it was (the picture was turned to the
+  // wanted side before it got here if the reading was sure). Null otherwise.
+  reading: PoseReading | null;
   // Set when preparing failed. The second stage then makes the error result without a request.
   failure?: { error: unknown };
 };
 
+// The wings are turned to the chosen side from the pixels of their pictures before they are sent to the backend (see
+// utils/orientPicture.ts). With false that is left to the answer of the backend alone, as it was before.
+const ORIENT_FROM_PIXELS = true;
 const UPLOAD_MAX_EDGE = 400;
 const ENABLE_UPLOAD_RESIZE = false;
 const THEME_STORAGE_KEY = "wingai-theme";
@@ -642,10 +654,15 @@ function App() {
     return { coords, check, orientation: data.orientation };
   }
 
-  async function cropImageToBoundingBox(image: ImageFile): Promise<ImageFile> {
+  // The crop of the photo around its main detection. When a side is wanted the wing is turned to it here, on the canvas,
+  // so that the picture is encoded once: the reading of the pose says how it lies (null: it was not read).
+  async function cropImageToBoundingBox(
+    image: ImageFile,
+    wanted: WingSide | null,
+  ): Promise<{ image: ImageFile; reading: PoseReading | null }> {
     const dets = image.detections;
     if (!dets || dets.length === 0 || !(image.showDetections ?? true)) {
-      return image;
+      return { image, reading: null };
     }
 
     // The same detection that the preview draws in green.
@@ -654,11 +671,17 @@ function App() {
       image.selectedDetectionIndex,
       new Set(image.excludedDetections ?? []),
     );
-    if (mainIndex === null) return image;
+    if (mainIndex === null) return { image, reading: null };
 
     try {
       const srcImg = await loadImage(image.previewUrl);
-      const canvas = straightenedCrop(srcImg, dets[mainIndex]);
+      let canvas = straightenedCrop(srcImg, dets[mainIndex]);
+      let reading: PoseReading | null = null;
+      if (wanted) {
+        const oriented = orientCanvas(canvas, wanted);
+        canvas = oriented.canvas;
+        reading = oriented.reading;
+      }
       const blob = await canvasToBlob(canvas, "image/png");
 
       const croppedFile = new File([blob], image.filename, {
@@ -667,15 +690,56 @@ function App() {
       });
 
       return {
-        ...image,
-        file: croppedFile,
-        previewUrl: URL.createObjectURL(blob),
-        width: canvas.width,
-        height: canvas.height,
+        image: {
+          ...image,
+          file: croppedFile,
+          previewUrl: URL.createObjectURL(blob),
+          width: canvas.width,
+          height: canvas.height,
+        },
+        reading,
       };
     } catch (err) {
       console.warn("Failed to crop image, using original.", image.filename, err);
-      return image;
+      return { image, reading: null };
+    }
+  }
+
+  // A picture that was not cropped (a wing that is already cut, or a photo without a detection) is read the same way. It is
+  // turned, and saved as a PNG (a JPEG is converted in the same step), only when it has to be turned. Otherwise it stays as it is.
+  async function orientUncropped(
+    image: ImageFile,
+    wanted: WingSide,
+  ): Promise<{ image: ImageFile; reading: PoseReading | null }> {
+    let loaded: HTMLImageElement;
+    try {
+      loaded = await loadImage(image.previewUrl);
+    } catch {
+      // A picture that cannot be loaded is reported by the steps that follow, with the error of the file.
+      return { image, reading: null };
+    }
+    try {
+      const { canvas, reading } = orientImage(loaded, wanted);
+      if (!canvas) return { image, reading };
+      const blob = await canvasToBlob(canvas, "image/png");
+      const filename = toPngFilename(image.filename);
+      return {
+        image: {
+          ...image,
+          filename,
+          file: new File([blob], filename, {
+            type: "image/png",
+            lastModified: image.file.lastModified,
+          }),
+          previewUrl: URL.createObjectURL(blob),
+          // The thumbnail is of the picture as it was.
+          thumbUrl: undefined,
+        },
+        reading,
+      };
+    } catch (error) {
+      console.warn("Failed to turn the image from its pixels, keeping its orientation.", image.filename, error);
+      return { image, reading: null };
     }
   }
 
@@ -685,23 +749,35 @@ function App() {
     image: ImageFile,
     signal: AbortSignal,
     madeUrls: Set<string>,
+    wanted: WingSide | null,
   ): Promise<PreparedImage> {
     let prepared = image;
     let width = image.width;
     let height = image.height;
     let cropped = false;
+    let reading: PoseReading | null = null;
     // The object URLs made here: released when the run is aborted, otherwise the run keeps track of them.
     const made: string[] = [];
     try {
-      const croppedImage = await cropImageToBoundingBox(prepared);
-      if (croppedImage !== prepared) {
-        made.push(croppedImage.previewUrl);
-        prepared = croppedImage;
+      const crop = await cropImageToBoundingBox(prepared, wanted);
+      if (crop.image !== prepared) {
+        made.push(crop.image.previewUrl);
+        prepared = crop.image;
         width = prepared.width;
         height = prepared.height;
         cropped = true;
+        reading = crop.reading;
       }
       if (signal.aborted) throw signal.reason;
+      if (wanted && !cropped) {
+        const oriented = await orientUncropped(prepared, wanted);
+        if (oriented.image !== prepared) {
+          made.push(oriented.image.previewUrl);
+          prepared = oriented.image;
+        }
+        reading = oriented.reading;
+        if (signal.aborted) throw signal.reason;
+      }
       const normalized = await normalizeJpegToPng(prepared);
       if (normalized.previewUrl !== prepared.previewUrl) {
         made.push(normalized.previewUrl);
@@ -731,14 +807,14 @@ function App() {
         throw new Error("Invalid image dimensions.");
       }
       made.forEach((url) => madeUrls.add(url));
-      return { image: prepared, width, height, cropped };
+      return { image: prepared, width, height, cropped, reading };
     } catch (error) {
       if (signal.aborted) {
         made.forEach((url) => URL.revokeObjectURL(url));
         throw error;
       }
       made.forEach((url) => madeUrls.add(url));
-      return { image: prepared, width, height, cropped, failure: { error } };
+      return { image: prepared, width, height, cropped, reading, failure: { error } };
     }
   }
 
@@ -748,7 +824,7 @@ function App() {
     preparedImage: PreparedImage,
     image: ImageFile,
     model: WingModel,
-    orientation: ReturnType<typeof orientationToApply>,
+    orientation: WingOrientation,
     signal: AbortSignal,
     madeUrls: Set<string>,
   ): Promise<ImageFile> {
@@ -775,6 +851,13 @@ function App() {
         rotate: needsRotation(orientation, analysis.coords, analysis.orientation),
       };
       if (turn.mirror || turn.rotate) {
+        if (preparedImage.reading?.sure) {
+          console.warn(
+            "The backend turns a wing whose pose was read for sure from its pixels.",
+            prepared.filename,
+            { read: preparedImage.reading, answer: analysis.orientation, turn },
+          );
+        }
         // The picture and its landmarks are turned together. If that fails, the wing
         // stays as it was with its original landmarks, never one turned without the other.
         try {
@@ -843,8 +926,14 @@ function App() {
   ) {
     if (images.length === 0) return;
 
-    const { model } = options;
-    const orientation = orientationToApply(options);
+    const plan = planRequest(options);
+    const { model } = plan;
+    const orientation = plan.correctAfter;
+    // The side the wings are turned to from their pixels before the request, none for "original".
+    const wanted =
+      ORIENT_FROM_PIXELS && plan.orientBefore !== "original"
+        ? plan.orientBefore
+        : null;
     const abortController = new AbortController();
     processingAbortRef.current = abortController;
     const { signal } = abortController;
@@ -888,7 +977,7 @@ function App() {
         prepareLimit: PREPARE_CONCURRENCY,
         analyzeLimit: PROCESS_CONCURRENCY,
         signal,
-        prepare: (image) => prepareImage(image, signal, madeUrls),
+        prepare: (image) => prepareImage(image, signal, madeUrls, wanted),
         onPrepared: (prepared, image) => {
           // Show the crop now, while the backend is still busy with the photos before it.
           if (!prepared.cropped) return;

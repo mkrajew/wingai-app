@@ -32,8 +32,8 @@ WingAI runs online at **https://wingai.ii.pw.edu.pl**. It needs no installation 
 
 - **Batch upload.** Drop `.png` and `.jpg` photos into the page and process them together.
 - **Wing detection (optional).** A YOLO detector runs in your browser through ONNX Runtime Web. It finds each wing as a rotated box and crops it, turned so that the wing lies horizontal. A photo with several wings is split into separate images. Each image has skip, flip and rotate controls.
-- **Two landmark models.** `precise` handles wings in their original, horizontal orientation. `rotation` handles rotated and mirrored wings. A switch in the header selects the model.
-- **Orientation.** With the `rotation` model, WingAI mirrors wings of the other handedness, so a whole sample consists of left wings or of right wings. It also turns wings that lie upside down by 180°, so all wings end in the same pose. Keeping the original orientation changes nothing.
+- **Two landmark models.** `precise` reads wings that lie upright with their base on the right. `rotation` handles wings in any pose. A switch in the header selects the model.
+- **Orientation.** Pick a side and WingAI turns every wing to it, upright. It mirrors wings of the other handedness and turns wings that lie upside down, so a whole sample consists of left wings or of right wings, all in the same pose. The browser reads how a wing lies from the pixels of its picture and turns the picture before the backend sees it. This is what lets the `precise` model work with the right orientation. A wing whose pose the pixels do not show with confidence is left as it is. With the `rotation` model the answer of the backend is still checked afterwards. Keeping the original orientation changes nothing.
 - **Review flag.** The backend flags wings with a wrong number of detected points, a failed match, or a large deviation from the mean wing shape.
 - **Interactive review.** Drag any landmark, zoom, pan, rename or delete images, and move between images with the keyboard.
 - **Export.** Download a CSV with the coordinates, a ZIP of PNG images with the landmarks embedded for IdentiFly, or both.
@@ -45,7 +45,8 @@ WingAI runs online at **https://wingai.ii.pw.edu.pl**. It needs no installation 
 ```mermaid
 flowchart LR
     A["Wing photos"] --> B["Detect and crop wings<br/>(optional, in the browser)"]
-    B --> C["POST /analyze"]
+    B --> P["Read the pose from the pixels<br/>and turn the wing to the chosen side<br/>(in the browser)"]
+    P --> C["POST /analyze"]
     C --> D["U-Net predicts one blob<br/>per landmark"]
     D --> E["Procrustes matching<br/>to the mean shape"]
     E --> F["Coordinates, review flag,<br/>orientation"]
@@ -54,16 +55,23 @@ flowchart LR
 ```
 
 1. The browser can detect each wing with the YOLO model and crop it, turned to horizontal. This step is optional. After the first download, the model file stays in the browser cache.
-2. The browser uploads an image to `POST /analyze`. The backend fits it into a 400 x 400 input, and a U-Net predicts one blob per landmark. The blob centres become coordinates in the original image.
-3. The blobs arrive in no fixed order. The backend aligns them to a mean wing shape with Procrustes analysis, which gives each point its landmark number.
-4. The same alignment shows whether the wing has the handedness of the mean shape (`right`) or is its mirror image (`left`). The app uses this to orient a whole sample.
-5. You review the points in the browser and export them.
+2. When you choose a side, the browser reads the pose of each wing from the pixels of its picture and turns the picture to that side, upright (see below). A picture whose pose is not read with confidence is left as it is.
+3. The browser uploads an image to `POST /analyze`. The backend fits it into a 400 x 400 input, and a U-Net predicts one blob per landmark. The blob centres become coordinates in the original image.
+4. The blobs arrive in no fixed order. The backend aligns them to a mean wing shape with Procrustes analysis, which gives each point its landmark number.
+5. The same alignment shows whether the wing has the handedness of the mean shape (`right`) or is its mirror image (`left`), and whether it lies upside down. With the `rotation` model the app checks this against the chosen side and turns a wing that is still wrong, together with its landmarks. The `precise` model gets no such correction.
+6. You review the points in the browser and export them.
+
+### Reading the pose from pixels
+
+A wing cropped by the detector lies in one of four poses: a right or a left wing, upright or upside down. The app shrinks the picture to 256 x 96 gray pixels, builds histograms of the directions of its gradients in a grid of 16 x 6 cells, and compares them with the average wing in each of the four poses (made from the complete wings of 13 countries). The best pose wins, and it is trusted when it beats the second best by a margin of 0.10. The step takes about 25 ms for a crop of 2200 x 950 pixels.
+
+Among 5 104 well cut wings that the detector found in all four poses (real photos, and wings of databases put on a canvas like a photo) it made no mistake, and the smallest margin of a right answer was above 0.3. A wing that is only a fragment, cut by the border of the photo, can be read confidently wrong. The `rotation` model corrects that after the answer. On wings turned to the right, the `precise` model finds the manual landmarks more accurately than the `rotation` model, by 0.3 px on average, in a test on 745 wings that the models did not see in training. [`tools/pose/REPORT.md`](tools/pose/REPORT.md) has the numbers.
 
 ## Using the application
 
 1. Open the page and drop your wing photos.
 2. Optional: open **Detection model** in the header, click **Load model**, and click **Detect**. Open a preview to choose the box that the app crops, or click **Extract wings** to split a photo with several wings.
-3. Pick the **Model** and the **Orientation** in the header. The `precise` model needs the original orientation.
+3. Pick the **Model** and the **Orientation** in the header. The `precise` model works with the original orientation and with the orientation to the right. To orient the wings to the left, use the `rotation` model.
 4. Click **Process**.
 5. Check the results. Wings flagged for review appear in a list at the top. Drag a point to move it.
 6. Click **Generate data** and download the CSV, the ZIP, or both.
@@ -81,7 +89,7 @@ The **Help** button in the header lists the keyboard shortcuts.
 ### Requirements
 
 - Production: Docker with Compose
-- Development: Python 3.13 with [uv](https://docs.astral.sh/uv/), and Node.js 20.19 or newer
+- Development: Python 3.13 with [uv](https://docs.astral.sh/uv/), and Node.js 20.19 or newer (22.18 or newer to run the tests)
 
 ### Model files
 
@@ -132,7 +140,7 @@ export default defineConfig({
 });
 ```
 
-`npm run lint` runs ESLint and `npm run build` type-checks and builds the production bundle.
+`npm run lint` runs ESLint, `npm test` runs the unit tests (Node.js 22.18 or newer, which runs the TypeScript as it is, with no extra packages) and `npm run build` type-checks the app and the tests and builds the production bundle.
 
 ### Production with Docker Compose
 
@@ -192,7 +200,11 @@ Errors: `422` for an empty or unreadable image, `500` when the analysis fails.
 │   └── models/           checkpoints (git-ignored)
 ├── frontend/             React and TypeScript app, built with Vite
 │   ├── src/              components, utilities, translations
+│   ├── tests/            unit tests (npm test) and the vectors they compare with
 │   └── public/           logo, icons, detector model (git-ignored)
+├── tools/                measurements and checks, not part of the app
+│   ├── pose/             reading the pose of a wing from its pixels: tests, report, template
+│   └── regression/       browser scripts that compare what Process does before and after a change
 ├── docker-compose.yml    production stack
 └── nginx.conf            reverse proxy and TLS
 ```
