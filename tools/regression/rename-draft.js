@@ -41,6 +41,7 @@
   const draft = "typed-draft.JPG";
 
   // 1. the photo is marked to be skipped: its data change, its name does not (a click that is not made with the mouse does not take the focus away)
+  nameField().focus();
   setValue(nameField(), draft);
   await ticks(10);
   result.typed = nameField().value;
@@ -73,8 +74,57 @@
   result.afterCommit = nameField().value;
   result.committedNameInTheList = document.body.innerText.includes(renamed);
 
+  // 4b. a name is committed by leaving the field
+  const leftWith = "renamed-by-leaving.JPG";
+  nameField().focus();
+  setValue(nameField(), leftWith);
+  await ticks(10);
+  nameField().blur();
+  nameField().dispatchEvent(new FocusEvent("focusout", { bubbles: true })); // a window that does not have the focus sends no blur
+  await ticks(30);
+  result.afterBlurCommit = nameField().value;
+  result.blurCommittedNameInTheList = document.body.innerText.includes(leftWith);
+
+  // 5. a photo that is renamed while Detect runs keeps its new name, and still gets its boxes (its number of detections in the list)
+  window.__runStage = "rename while Detect runs";
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await ticks(20);
+  btn("Clear").click(); await ticks(10);
+  [...document.querySelectorAll("[role=dialog] button")].find((b) => b.textContent.trim() === "Clear").click();
+  await waitFor(() => !document.querySelector("li"), "the list is empty");
+  const again = files.map((f, i) => new File([f], f.name, { type: f.type, lastModified: 1800000000000 + i }));
+  const dt2 = new DataTransfer(); again.forEach((f) => dt2.items.add(f));
+  input.files = dt2.files;
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  await waitFor(() => again.every((f) => document.body.innerText.includes(f.name)), "listed again");
+  await waitFor(() => !document.querySelector('li div.rounded.border[aria-hidden="true"]'), "every thumbnail again");
+  await ticks(30);
+  btn("Detect").click();
+  await waitFor(() => btn("Detect").disabled, "Detect has started again");
+  [...document.querySelectorAll("li")].at(-1).click();
+  await waitFor(() => nameField(), "the preview window again");
+  const duringDetect = "renamed-during-detect.JPG";
+  const detectedBeforeRename = document.querySelectorAll("li .badge").length;
+  nameField().focus();
+  setValue(nameField(), duringDetect);
+  await ticks(10);
+  nameField().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  await ticks(20);
+  result.renamedWhileDetectingAfterRename = nameField().value;
+  result.detectedBeforeRename = detectedBeforeRename;
+  await waitFor(() => !btn("Detect").disabled, "Detect over again", 120000);
+  await ticks(40);
+  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await ticks(20);
+  const item = [...document.querySelectorAll("li")].find((li) => li.innerText.includes(duringDetect));
+  result.renamedWhileDetectingInTheList = !!item;
+  result.renamedWhileDetectingBadge = item ? (item.querySelector(".badge")?.textContent ?? null) : null;
+  result.noOneLostItsName = files.slice(0, -1).every((f) => document.body.innerText.includes(f.name));
+
   result.ok = result.start === files[0].name && result.typed === draft && result.afterSkipToggle === draft && result.afterSkipToggleBack === draft
-    && result.afterDetect === draft && result.afterNext === files[1].name && result.afterCommit === renamed && result.committedNameInTheList;
+    && result.afterDetect === draft && result.afterNext === files[1].name && result.afterCommit === renamed && result.committedNameInTheList
+    && result.afterBlurCommit === leftWith && result.blurCommittedNameInTheList
+    && result.detectedBeforeRename < again.length && result.renamedWhileDetectingAfterRename === duringDetect && result.renamedWhileDetectingInTheList && Number(result.renamedWhileDetectingBadge) >= 1 && result.noOneLostItsName;
   window.__runStage = "reporting";
   await fetch(`${BASE}/regression/collect/rename-draft-${LABEL}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(result) });
   return result;

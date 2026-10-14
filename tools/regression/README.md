@@ -142,8 +142,10 @@ photo are drawn in the open preview, how often React committed while Detect ran 
 versions in the order A B B A, several times.
 
 `rename-draft.js` (same conditions) types a name into the name field of the preview window, then marks the photo to be skipped and lets Detect give it its boxes: the name that is being typed
-has to stay. Then the next photo is shown (the field takes its name) and a name is committed with Enter (the photo is renamed, the field and the list show it). `ok` in the result says whether all
-of it came out right. Before the name field was keyed on the name of the photo, the typed name was lost at the first change of the photo.
+has to stay. Then the next photo is shown (the field takes its name) and a name is committed with Enter and by leaving the field (the photo is renamed, the field and the list show it). Last, a
+photo is renamed while Detect runs, before its turn: it has to keep its new name and still get its boxes (its number of detections in the list). `ok` in the result says whether all of it came
+out right. Before the name field was keyed on the name of the photo, the typed name was lost at the first change of the photo, and before the results of Detect were found by the id of the
+photo, a photo that was renamed meanwhile got no boxes.
 
 ## Notes for working in the Browser pane
 
