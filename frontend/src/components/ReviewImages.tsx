@@ -79,7 +79,7 @@ function ReviewImagesContent({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState(image.filename);
   // The name that the field was last set from.
-  const [renamedFrom, setRenamedFrom] = useState(image.filename);
+  const [renamedFrom, setRenamedFrom] = useState<string | null>(image.filename);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const activeItemRef = useRef<HTMLButtonElement | null>(null);
   const zoomInputRef = useRef<HTMLInputElement | null>(null);
@@ -243,13 +243,12 @@ function ReviewImagesContent({
   const commitRename = () => {
     if (!image) return;
     const trimmed = renameValue.trim();
-    if (!trimmed) {
-      setRenameValue(image.filename);
-      return;
-    }
-    if (trimmed !== image.filename) {
+    if (trimmed && trimmed !== image.filename) {
       onRename(index, trimmed);
     }
+    // The field is set again from the name that the photo has by then, not left with what was typed: a blank name is
+    // put back, the extension shows at the end of a name typed without it, a name that another photo has shows its number.
+    if (renameValue !== image.filename) setRenamedFrom(null);
   };
 
   useEffect(() => {

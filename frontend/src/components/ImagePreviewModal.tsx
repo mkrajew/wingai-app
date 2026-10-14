@@ -56,6 +56,8 @@ export default function ImagePreviewModal({
     height: number;
   } | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  // The name that the field was last set from.
+  const [renamedFrom, setRenamedFrom] = useState<string | null>(null);
   const [hoveredDetIndex, setHoveredDetIndex] = useState<number | null>(null);
   const [showConfidence, setShowConfidence] = useState(true);
   const showBoxes = previewImage?.showDetections ?? true;
@@ -174,10 +176,19 @@ export default function ImagePreviewModal({
   // The name field takes the name of the photo that is shown, and a new name once it is committed. It does not take it
   // when the photo only gets something else (its thumbnail, its size, its boxes), or a name that is being typed is lost.
   const previewFilename = previewImage?.filename;
-  useEffect(() => {
-    if (previewFilename === undefined) return;
+  if (previewFilename !== undefined && renamedFrom !== previewFilename) {
+    setRenamedFrom(previewFilename);
     setRenameValue(previewFilename);
-  }, [previewFilename]);
+  }
+
+  const commitRename = () => {
+    const trimmed = renameValue.trim();
+    if (!trimmed || previewIndex === null) return;
+    onRename(previewIndex, trimmed);
+    // The photo may get another name than the one typed (the extension is put at the end, a name that another photo
+    // has gets a number) or keep its name, so the field is set again from the name that the photo has by then.
+    if (renameValue !== previewFilename) setRenamedFrom(null);
+  };
 
   useEffect(() => {
     if (!previewImage) return;
@@ -464,13 +475,10 @@ export default function ImagePreviewModal({
           onKeyDown={(event) => {
             if (event.key !== "Enter") return;
             if (!renameValue.trim() || previewIndex === null) return;
-            onRename(previewIndex, renameValue.trim());
+            commitRename();
             event.currentTarget.blur();
           }}
-          onBlur={() => {
-            if (!renameValue.trim() || previewIndex === null) return;
-            onRename(previewIndex, renameValue.trim());
-          }}
+          onBlur={commitRename}
         />
         <div className="text-center text-muted">
           {formatBytes(previewImage.file.size)}
