@@ -39,6 +39,36 @@ export const splitFilename = (name: string) => {
   return { base: trimmed, ext: "" };
 };
 
+/**
+ * The name that a photo gets when `typed` is entered in its name field, before it is made different from the names of
+ * the other photos (`null` when nothing is typed). The photo keeps the extension it has: `.dw.png` after Process, else
+ * the last one, which comes back at the end of the name whatever ending is typed.
+ */
+export const renamedFilename = (
+  typed: string,
+  currentName: string,
+): string | null => {
+  const trimmed = typed.trim();
+  if (!trimmed) return null;
+
+  const hasDwPng = /\.dw\.png$/i.test(currentName);
+  const lastDot = currentName.lastIndexOf(".");
+  const ext = hasDwPng ? ".dw.png" : lastDot > 0 ? currentName.slice(lastDot) : "";
+
+  // The extension is in the typed text, but not at its end: text was typed after the whole name, so all of it is the
+  // name. Without this, that text would be taken for another extension and thrown away.
+  const lower = trimmed.toLowerCase();
+  const typedAfterExt =
+    ext !== "" && lower.includes(ext.toLowerCase()) && !lower.endsWith(ext.toLowerCase());
+
+  let base = trimmed;
+  if (ext !== "" && !typedAfterExt) {
+    if (hasDwPng) base = base.replace(/\.dw\.png$/i, "");
+    base = base.replace(/\.[^.]+$/, "");
+  }
+  return `${base}${ext}`;
+};
+
 export const ensureUniqueFilenameFromSet = (
   desiredName: string,
   used: Set<string>,

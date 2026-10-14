@@ -15,6 +15,7 @@ import {
   isJpegFile,
   toPngFilename,
   toDwPngFilename,
+  renamedFilename,
   ensureUniqueFilename,
   ensureUniqueFilenameFromSet,
 } from "./utils/filename";
@@ -249,27 +250,8 @@ function App() {
       const target = prevFiles[index];
       if (!target) return prevFiles;
 
-      const trimmed = newName.trim();
-      if (!trimmed) return prevFiles;
-
-      const originalName = target.filename;
-      const hasDwPng = /\.dw\.png$/i.test(originalName);
-      const lastDot = originalName.lastIndexOf(".");
-      const originalExt = lastDot > 0 ? originalName.slice(lastDot) : "";
-
-      let base = trimmed;
-      if (hasDwPng) {
-        base = base.replace(/\.dw\.png$/i, "");
-        base = base.replace(/\.[^.]+$/, "");
-      } else if (originalExt.length > 0) {
-        base = base.replace(/\.[^.]+$/, "");
-      }
-
-      const finalName = hasDwPng
-        ? `${base}.dw.png`
-        : originalExt.length > 0
-          ? `${base}${originalExt}`
-          : base;
+      const finalName = renamedFilename(newName, target.filename);
+      if (finalName === null) return prevFiles;
 
       const uniqueName = ensureUniqueFilename(finalName, index, prevFiles);
       if (uniqueName === target.filename) return prevFiles;
