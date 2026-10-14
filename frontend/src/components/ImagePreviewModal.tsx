@@ -171,10 +171,13 @@ export default function ImagePreviewModal({
     setHoveredDetIndex(null);
   }, [previewImage?.previewUrl]);
 
+  // The name field takes the name of the photo that is shown, and a new name once it is committed. It does not take it
+  // when the photo only gets something else (its thumbnail, its size, its boxes), or a name that is being typed is lost.
+  const previewFilename = previewImage?.filename;
   useEffect(() => {
-    if (!previewImage) return;
-    setRenameValue(previewImage.filename);
-  }, [previewImage]);
+    if (previewFilename === undefined) return;
+    setRenameValue(previewFilename);
+  }, [previewFilename]);
 
   useEffect(() => {
     if (!previewImage) return;
