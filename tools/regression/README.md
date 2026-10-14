@@ -141,6 +141,10 @@ photo are drawn in the open preview, how often React committed while Detect ran 
 `__PREVIEW = false` leaves the preview closed. The time of Detect varies from run to run by more than any difference between versions (10 to 17 s for 24 photos in the hidden pane), so compare
 versions in the order A B B A, several times.
 
+`rename-draft.js` (same conditions) types a name into the name field of the preview window, then marks the photo to be skipped and lets Detect give it its boxes: the name that is being typed
+has to stay. Then the next photo is shown (the field takes its name) and a name is committed with Enter (the photo is renamed, the field and the list show it). `ok` in the result says whether all
+of it came out right. Before the name field was keyed on the name of the photo, the typed name was lost at the first change of the photo.
+
 ## Notes for working in the Browser pane
 
 * A hidden pane waits about a second in every `canvas.toBlob`, and `img.decode()` never settles there: use `onload`. The tool gives a script 45 seconds,
