@@ -32,6 +32,7 @@ import { orientCanvas, orientImage } from "./utils/orientPicture";
 import type { PoseReading, WingSide } from "./utils/poseFromPixels";
 import { mainDetectionIndex } from "./utils/mainDetection";
 import { mapWithConcurrency, runPipeline } from "./utils/async";
+import { detectPhotos } from "./utils/detectPhotos";
 import {
   applyDetections,
   newImageId,
@@ -316,32 +317,25 @@ function App() {
     setDetection({ inProgress: true, completed: 0, total: toDetect.length });
     setDetectionError(null);
     try {
-      const detectionMap = new Map<
-        string,
-        { previewUrl: string; detections: Detection[] }
-      >();
-      for (const img of toDetect) {
-        try {
-          const dets = await detectFromUrl(img.previewUrl);
-          detectionMap.set(img.filename, {
-            previewUrl: img.previewUrl,
-            detections: dets,
-          });
-        } catch (err) {
-          const message = err instanceof Error ? err.message : "Unknown error";
-          if (detectionMap.size === 0) {
-            setDetectionError(message);
-            return;
-          }
-        } finally {
+      const { error } = await detectPhotos(toDetect, detectFromUrl, {
+        // A photo gets its boxes as soon as they are there, not when the last photo is done. They go into the photo
+        // as it is now: while Detect runs it gets its thumbnail and its size.
+        onResult: (img, dets) =>
+          setImageFiles((prev) =>
+            applyDetections(
+              prev,
+              new Map([
+                [img.filename, { previewUrl: img.previewUrl, detections: dets }],
+              ]),
+            ),
+          ),
+        onProgress: () =>
           setDetection((prev) => ({
             ...prev,
             completed: Math.min(prev.total, prev.completed + 1),
-          }));
-        }
-      }
-      // Into the photos as they are now: while Detect ran they got their thumbnails and sizes.
-      setImageFiles((prev) => applyDetections(prev, detectionMap));
+          })),
+      });
+      if (error !== null) setDetectionError(error);
     } finally {
       setDetection((prev) => ({ ...prev, inProgress: false }));
     }
