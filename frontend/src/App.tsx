@@ -15,6 +15,7 @@ import {
   isJpegFile,
   toPngFilename,
   toDwPngFilename,
+  renamedFilename,
   ensureUniqueFilename,
   ensureUniqueFilenameFromSet,
 } from "./utils/filename";
@@ -32,7 +33,13 @@ import { orientCanvas, orientImage } from "./utils/orientPicture";
 import type { PoseReading, WingSide } from "./utils/poseFromPixels";
 import { mainDetectionIndex } from "./utils/mainDetection";
 import { mapWithConcurrency, runPipeline } from "./utils/async";
-import { newImageId, patchImageById } from "./utils/imageState";
+import { detectPhotos } from "./utils/detectPhotos";
+import {
+  applyDetections,
+  newImageId,
+  patchImageById,
+  photosLoading,
+} from "./utils/imageState";
 import {
   DEFAULT_WING_OPTIONS,
   chooseModel,
@@ -60,6 +67,10 @@ export type ImageFile = {
   file: File;
   previewUrl: string;
   thumbUrl?: string;
+  // The thumbnail could not be made, or the size could not be read (the picture cannot be decoded). The photo is
+  // then done with loading, see photosLoading.
+  thumbFailed?: boolean;
+  dimensionsFailed?: boolean;
   status: "new" | "uploading" | "edit" | "done" | "error";
   vector?: number[];
   check?: boolean;
@@ -239,27 +250,8 @@ function App() {
       const target = prevFiles[index];
       if (!target) return prevFiles;
 
-      const trimmed = newName.trim();
-      if (!trimmed) return prevFiles;
-
-      const originalName = target.filename;
-      const hasDwPng = /\.dw\.png$/i.test(originalName);
-      const lastDot = originalName.lastIndexOf(".");
-      const originalExt = lastDot > 0 ? originalName.slice(lastDot) : "";
-
-      let base = trimmed;
-      if (hasDwPng) {
-        base = base.replace(/\.dw\.png$/i, "");
-        base = base.replace(/\.[^.]+$/, "");
-      } else if (originalExt.length > 0) {
-        base = base.replace(/\.[^.]+$/, "");
-      }
-
-      const finalName = hasDwPng
-        ? `${base}.dw.png`
-        : originalExt.length > 0
-          ? `${base}${originalExt}`
-          : base;
+      const finalName = renamedFilename(newName, target.filename);
+      if (finalName === null) return prevFiles;
 
       const uniqueName = ensureUniqueFilename(finalName, index, prevFiles);
       if (uniqueName === target.filename) return prevFiles;
@@ -307,25 +299,25 @@ function App() {
     setDetection({ inProgress: true, completed: 0, total: toDetect.length });
     setDetectionError(null);
     try {
-      const detectionMap = new Map<string, ImageFile>();
-      for (const img of toDetect) {
-        try {
-          const dets = await detectFromUrl(img.previewUrl);
-          detectionMap.set(img.filename, { ...img, detections: dets });
-        } catch (err) {
-          const message = err instanceof Error ? err.message : "Unknown error";
-          if (detectionMap.size === 0) {
-            setDetectionError(message);
-            return;
-          }
-        } finally {
+      const { error } = await detectPhotos(toDetect, detectFromUrl, {
+        // A photo gets its boxes as soon as they are there, not when the last photo is done. They go into the photo
+        // as it is now: while Detect runs it gets its thumbnail and its size.
+        onResult: (img, dets) =>
+          setImageFiles((prev) =>
+            applyDetections(
+              prev,
+              new Map([
+                [img.id, { previewUrl: img.previewUrl, detections: dets }],
+              ]),
+            ),
+          ),
+        onProgress: () =>
           setDetection((prev) => ({
             ...prev,
             completed: Math.min(prev.total, prev.completed + 1),
-          }));
-        }
-      }
-      setImageFiles((prev) => prev.map((img) => detectionMap.get(img.filename) ?? img));
+          })),
+      });
+      if (error !== null) setDetectionError(error);
     } finally {
       setDetection((prev) => ({ ...prev, inProgress: false }));
     }
@@ -395,6 +387,8 @@ function App() {
                 file: newFile,
                 previewUrl: newPreviewUrl,
                 thumbUrl: undefined,
+                thumbFailed: undefined,
+                dimensionsFailed: undefined,
                 width,
                 height,
                 detections: undefined,
@@ -1026,6 +1020,8 @@ function App() {
   }
 
   async function processImages() {
+    // The button is disabled for the same reasons; this is for any other way in.
+    if (detection.inProgress || photosLoading(imageFiles)) return;
     const toProcess = imageFiles.filter((f) => !f.skipProcessing);
     if (toProcess.length === 0) return;
 
@@ -1106,6 +1102,13 @@ function App() {
         })
         .catch((error) => {
           console.warn("Failed to read image dimensions.", filename, error);
+          setImageFiles((prevFiles) =>
+            prevFiles.map((item) =>
+              item.previewUrl === previewUrl
+                ? { ...item, dimensionsFailed: true }
+                : item,
+            ),
+          );
         });
     }
   }, [imageFiles]);
@@ -1142,6 +1145,11 @@ function App() {
         });
       } catch (error) {
         console.warn("Failed to generate thumbnail.", error);
+        setImageFiles((prevFiles) =>
+          prevFiles.map((f) =>
+            f.previewUrl === previewUrl ? { ...f, thumbFailed: true } : f,
+          ),
+        );
       }
     });
   }, [imageFiles, step]);

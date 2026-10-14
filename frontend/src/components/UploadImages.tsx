@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import type { ImageFile } from "../App";
 import { useDropzone } from "react-dropzone";
 import { formatBytes } from "../utils";
+import { photosLoading } from "../utils/imageState";
 import ImagePreviewModal from "./ImagePreviewModal";
 import ConfirmDialog from "./ConfirmDialog";
 import { useT } from "../i18n";
@@ -79,6 +80,7 @@ function UploadImages({
         onProcess={onProcess}
         onDetect={onDetect}
         isDetecting={isDetecting}
+        isLoadingPhotos={photosLoading(images)}
         detectionError={detectionError}
         onToggleSkipProcessing={onToggleSkipProcessing}
         onSelectImage={(_image, originalIndex) => {
@@ -173,6 +175,8 @@ type ImageListProps = {
   onProcess: () => void;
   onDetect: () => void;
   isDetecting: boolean;
+  // Some photo has not got its thumbnail or its size yet.
+  isLoadingPhotos: boolean;
   detectionError: string | null;
   onToggleSkipProcessing: (filename: string) => void;
   onSelectImage: (image: ImageFile, index: number) => void;
@@ -188,6 +192,7 @@ function ImageList({
   onProcess,
   onDetect,
   isDetecting,
+  isLoadingPhotos,
   detectionError,
   onToggleSkipProcessing,
   onSelectImage,
@@ -196,6 +201,13 @@ function ImageList({
   const t = useT();
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   if (totalCount === 0) return null;
+  // Process waits until Detect has finished and the photos have their thumbnails and sizes: it keeps the list that
+  // "Edit" brings back, and a photo that was still loading would stay without them.
+  const processWaitsFor = isDetecting
+    ? t.processWaitsForDetect
+    : isLoadingPhotos
+      ? t.processWaitsForPhotos
+      : null;
   return (
     <div className="d-flex flex-column mt-3">
       <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-3 mb-3">
@@ -215,7 +227,20 @@ function ImageList({
           </div>
         </div>
         <div className="d-flex align-items-center gap-2">
-          <button type="button" className="btn btn-primary" onClick={onProcess}>
+          <button
+            type="button"
+            className="btn btn-primary d-flex align-items-center gap-2"
+            onClick={onProcess}
+            disabled={processWaitsFor !== null}
+            title={processWaitsFor ?? undefined}
+          >
+            {!isDetecting && isLoadingPhotos && (
+              <span
+                className="spinner-border spinner-border-sm"
+                role="status"
+                aria-hidden="true"
+              />
+            )}
             {t.process}
           </button>
           <button

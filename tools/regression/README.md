@@ -124,6 +124,35 @@ node tools/regression/compare-trace.mjs main-1 branch-1     # exit code 0: every
 `review-bench.js` counts, for the same kinds of events, the commits of React and the renders of the review screen, from what the dev build of React 19 writes with
 `console.timeStamp`. A stopwatch is useless in a hidden pane (it depends on whether the window draws frames), the counts are not. Run it after `run.js` like `review-trace.js`.
 
+## Process waits for the photos and for Detect (`process-wait.js`)
+
+`process-wait.js` runs on its own in a freshly loaded page, with the helper server and the recorded answers of the backend of the previous section (no backend). It uploads
+eight photos and a file that is not a picture and watches the Process button: it has to be disabled, with a spinner and a hint, until every thumbnail and size has come (the
+broken file gets neither and must not hold it back); then Detect is started at once, while the photos are still loading, and Process has to be disabled the whole time and every
+photo that can be read has to keep its thumbnail; then Process and Edit (the list is back with every thumbnail); a flip in the preview window (Process waits for the new
+thumbnail); and the hint in Polish. The result is `work/collected-process-wait-<label>.json`. On the code from before the change (`lint-fixes`) it shows Process enabled at
+once, no thumbnails when Process can be clicked, and thumbnails that are lost to Detect and never come back (6 of 8 after Edit).
+
+`run.js` and `e2e-orientation.js` wait for an enabled Process button before they click it.
+
+`detect-live.js` (same conditions, the dev build, a window of a proper size, for example `resize_window` to 1000 by 700; without it the picture of the preview has no size and no box is drawn)
+uploads 24 photos (`__COPIES`), opens the preview on the first one and clicks Detect. It records when the photos show their detections (one by one, or all at the end), when the boxes of the first
+photo are drawn in the open preview, how often React committed while Detect ran and how long its renders took, and the final numbers of detections, which have to be the same in every version.
+`__PREVIEW = false` leaves the preview closed. The time of Detect varies from run to run by more than any difference between versions (10 to 17 s for 24 photos in the hidden pane), so compare
+versions in the order A B B A, several times.
+
+`rename-draft.js` (same conditions) types a name into the name field of the preview window, then marks the photo to be skipped and lets Detect give it its boxes: the name that is being typed
+has to stay. Then the next photo is shown (the field takes its name) and a name is committed with Enter and by leaving the field (the photo is renamed, the field and the list show it). The field
+has to show the name the photo really has: also when what was typed comes out as the name it has already (no extension typed, or the name of another photo, which gets a number, typed twice), and when
+text was typed after the whole name (it stays in the name and the extension goes to the end). Last, a photo is renamed while Detect runs, before its turn: it has to keep its new name and still get
+its boxes (its number of detections in the list). `ok` in the result says whether all of it came out right. Before the name field was keyed on the name of the photo, the typed name was lost at the
+first change of the photo, before the results of Detect were found by the id of the photo, a photo that was renamed meanwhile got no boxes, and before the field was set again after a commit, it kept
+what was typed whenever the name came out the same.
+
+`rename-review.js` does the same for the name field of the review screen, in a page that `run.js` (S1, with the recorded answers, see above) has left on the review screen: a name typed without the
+ending `.dw.png`, with another ending or with spaces around it, a name of another photo typed twice, text typed after the whole name, and a blank name. After each of them the field has to show the
+name the photo has. `ok` in the result says whether all of it came out right.
+
 ## Notes for working in the Browser pane
 
 * A hidden pane waits about a second in every `canvas.toBlob`, and `img.decode()` never settles there: use `onload`. The tool gives a script 45 seconds,
