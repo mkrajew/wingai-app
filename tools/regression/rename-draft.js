@@ -1,5 +1,7 @@
 // Is a name that is being typed in the preview window kept while the photo changes in other ways (it is marked to be skipped, Detect gives it its
-// boxes), and does the field still follow the photo when another photo is shown and when a name is committed? Runs on its own in a freshly loaded page
+// boxes), and does the field still follow the photo when another photo is shown and when a name is committed? A committed name shows as the name the photo
+// has: also when it comes out the same as before (typed without the extension, a name of another photo typed twice) and when text was typed after the whole
+// name (it stays, the extension goes to the end). Runs on its own in a freshly loaded page
 // and needs only the Vite page and the helper server (a window of a proper size, see the README):
 //   Object.assign(window, { __LABEL: "before" }); await (0, eval)(await (await fetch("http://127.0.0.1:8765/regression/rename-draft.js", { cache: "no-store" })).text());
 // The result is posted to work/collected-rename-draft-<label>.json and returned. `ok` says whether every check came out as it should.
@@ -85,6 +87,42 @@
   result.afterBlurCommit = nameField().value;
   result.blurCommittedNameInTheList = document.body.innerText.includes(leftWith);
 
+  // 4c. a name that comes out the same as the one the photo has (typed without its extension): the field shows the name of the photo, not what was typed
+  const typeAndEnter = async (text) => {
+    nameField().focus();
+    setValue(nameField(), text);
+    await ticks(10);
+    nameField().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    await ticks(30);
+    return nameField().value;
+  };
+  const typeAndLeave = async (text) => {
+    nameField().focus();
+    setValue(nameField(), text);
+    await ticks(10);
+    nameField().blur();
+    nameField().dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+    await ticks(30);
+    return nameField().value;
+  };
+  const withoutExtension = leftWith.replace(/\.JPG$/, "");
+  result.afterNoExtensionEnter = await typeAndEnter(withoutExtension);
+  result.afterNoExtensionLeave = await typeAndLeave(withoutExtension);
+
+  // 4d. text typed after the whole name stays in the name, and the extension goes to the end
+  const appendedName = `${leftWith}abc.JPG`;
+  result.afterAppendedEnter = await typeAndEnter(`${leftWith}abc`);
+  result.appendedNameInTheList = document.body.innerText.includes(appendedName);
+  result.afterAppendedLeave = await typeAndLeave(`${appendedName}_2`);
+  result.appendedAgainInTheList = document.body.innerText.includes(`${appendedName}_2.JPG`);
+
+  // 4e. a name that another photo has: the photo gets a number, and typing the same again gives the name it has, so the field shows that
+  const taken = files[2].name;
+  const takenWithNumber = taken.replace(/\.JPG$/, "(2).JPG");
+  result.afterTakenName = await typeAndEnter(taken);
+  result.afterTakenNameAgain = await typeAndEnter(taken);
+  result.afterTakenNameAgainLeave = await typeAndLeave(taken);
+
   // 5. a photo that is renamed while Detect runs keeps its new name, and still gets its boxes (its number of detections in the list)
   window.__runStage = "rename while Detect runs";
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
@@ -124,6 +162,10 @@
   result.ok = result.start === files[0].name && result.typed === draft && result.afterSkipToggle === draft && result.afterSkipToggleBack === draft
     && result.afterDetect === draft && result.afterNext === files[1].name && result.afterCommit === renamed && result.committedNameInTheList
     && result.afterBlurCommit === leftWith && result.blurCommittedNameInTheList
+    && result.afterNoExtensionEnter === leftWith && result.afterNoExtensionLeave === leftWith
+    && result.afterAppendedEnter === appendedName && result.appendedNameInTheList
+    && result.afterAppendedLeave === `${appendedName}_2.JPG` && result.appendedAgainInTheList
+    && result.afterTakenName === takenWithNumber && result.afterTakenNameAgain === takenWithNumber && result.afterTakenNameAgainLeave === takenWithNumber
     && result.detectedBeforeRename < again.length && result.renamedWhileDetectingAfterRename === duringDetect && result.renamedWhileDetectingInTheList && Number(result.renamedWhileDetectingBadge) >= 1 && result.noOneLostItsName;
   window.__runStage = "reporting";
   await fetch(`${BASE}/regression/collect/rename-draft-${LABEL}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(result) });

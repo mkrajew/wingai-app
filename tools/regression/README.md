@@ -142,10 +142,16 @@ photo are drawn in the open preview, how often React committed while Detect ran 
 versions in the order A B B A, several times.
 
 `rename-draft.js` (same conditions) types a name into the name field of the preview window, then marks the photo to be skipped and lets Detect give it its boxes: the name that is being typed
-has to stay. Then the next photo is shown (the field takes its name) and a name is committed with Enter and by leaving the field (the photo is renamed, the field and the list show it). Last, a
-photo is renamed while Detect runs, before its turn: it has to keep its new name and still get its boxes (its number of detections in the list). `ok` in the result says whether all of it came
-out right. Before the name field was keyed on the name of the photo, the typed name was lost at the first change of the photo, and before the results of Detect were found by the id of the
-photo, a photo that was renamed meanwhile got no boxes.
+has to stay. Then the next photo is shown (the field takes its name) and a name is committed with Enter and by leaving the field (the photo is renamed, the field and the list show it). The field
+has to show the name the photo really has: also when what was typed comes out as the name it has already (no extension typed, or the name of another photo, which gets a number, typed twice), and when
+text was typed after the whole name (it stays in the name and the extension goes to the end). Last, a photo is renamed while Detect runs, before its turn: it has to keep its new name and still get
+its boxes (its number of detections in the list). `ok` in the result says whether all of it came out right. Before the name field was keyed on the name of the photo, the typed name was lost at the
+first change of the photo, before the results of Detect were found by the id of the photo, a photo that was renamed meanwhile got no boxes, and before the field was set again after a commit, it kept
+what was typed whenever the name came out the same.
+
+`rename-review.js` does the same for the name field of the review screen, in a page that `run.js` (S1, with the recorded answers, see above) has left on the review screen: a name typed without the
+ending `.dw.png`, with another ending or with spaces around it, a name of another photo typed twice, text typed after the whole name, and a blank name. After each of them the field has to show the
+name the photo has. `ok` in the result says whether all of it came out right.
 
 ## Notes for working in the Browser pane
 
