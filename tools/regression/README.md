@@ -135,6 +135,12 @@ once, no thumbnails when Process can be clicked, and thumbnails that are lost to
 
 `run.js` and `e2e-orientation.js` wait for an enabled Process button before they click it.
 
+`detect-live.js` (same conditions, the dev build, a window of a proper size, for example `resize_window` to 1000 by 700; without it the picture of the preview has no size and no box is drawn)
+uploads 24 photos (`__COPIES`), opens the preview on the first one and clicks Detect. It records when the photos show their detections (one by one, or all at the end), when the boxes of the first
+photo are drawn in the open preview, how often React committed while Detect ran and how long its renders took, and the final numbers of detections, which have to be the same in every version.
+`__PREVIEW = false` leaves the preview closed. The time of Detect varies from run to run by more than any difference between versions (10 to 17 s for 24 photos in the hidden pane), so compare
+versions in the order A B B A, several times.
+
 ## Notes for working in the Browser pane
 
 * A hidden pane waits about a second in every `canvas.toBlob`, and `img.decode()` never settles there: use `onload`. The tool gives a script 45 seconds,
