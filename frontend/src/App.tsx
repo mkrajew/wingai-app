@@ -325,7 +325,7 @@ function App() {
             applyDetections(
               prev,
               new Map([
-                [img.filename, { previewUrl: img.previewUrl, detections: dets }],
+                [img.id, { previewUrl: img.previewUrl, detections: dets }],
               ]),
             ),
           ),

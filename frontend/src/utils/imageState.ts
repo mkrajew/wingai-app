@@ -37,19 +37,19 @@ export function photosLoading(
 
 /**
  * The list with the detections of Detect put into the photos. Detect takes a while, and meanwhile the photos get
- * their thumbnails and their sizes, so the result goes into the photos as they are now, not into the copies that
- * Detect started with. A photo whose picture was replaced meanwhile (flipped, rotated) gets nothing, the boxes
- * belong to the old picture.
+ * their thumbnails and their sizes, and a person may rename a photo, so the result goes into the photos as they are
+ * now, not into the copies that Detect started with, and a photo is found by its id, not by its name. A photo
+ * whose picture was replaced meanwhile (flipped, rotated) gets nothing, the boxes belong to the old picture.
  */
 export function applyDetections<
-  T extends { filename: string; previewUrl: string; detections?: D },
+  T extends { id: string; previewUrl: string; detections?: D },
   D,
 >(
   images: T[],
   found: Map<string, { previewUrl: string; detections: D }>,
 ): T[] {
   return images.map((image) => {
-    const result = found.get(image.filename);
+    const result = found.get(image.id);
     return result && result.previewUrl === image.previewUrl
       ? { ...image, detections: result.detections }
       : image;

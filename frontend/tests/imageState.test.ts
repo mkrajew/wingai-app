@@ -72,6 +72,23 @@ test("applyDetections gives the photo its detections and keeps what the photo go
   assert.equal(atStart.thumbUrl, undefined, "the copy from the start is not touched");
 });
 
+test("applyDetections finds the photo by its id, so a photo that was renamed while Detect was running still gets its detections and keeps its new name", () => {
+  const renamed: Photo = { ...loaded("a"), filename: "new-name.jpg" };
+  const found = new Map([["a", { previewUrl: "blob:a", detections: ["wing"] }]]);
+  const [after] = applyDetections([renamed], found);
+  assert.deepEqual(after, { ...renamed, detections: ["wing"] });
+  assert.equal(after.filename, "new-name.jpg");
+});
+
+test("applyDetections does not mix up two photos that have the same name", () => {
+  const first: Photo = { ...loaded("a"), id: "first", filename: "same.jpg", previewUrl: "blob:first" };
+  const second: Photo = { ...loaded("a"), id: "second", filename: "same.jpg", previewUrl: "blob:second" };
+  const found = new Map([["second", { previewUrl: "blob:second", detections: ["wing"] }]]);
+  const after = applyDetections([first, second], found);
+  assert.equal(after[0], first);
+  assert.deepEqual(after[1], { ...second, detections: ["wing"] });
+});
+
 test("applyDetections leaves a photo alone whose picture was replaced while Detect was running (flipped, rotated)", () => {
   const turned: Photo = { ...loaded("a"), previewUrl: "blob:a-turned" };
   const found = new Map([["a", { previewUrl: "blob:a", detections: ["wing"] }]]);
