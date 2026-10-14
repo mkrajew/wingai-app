@@ -160,7 +160,7 @@ function resizeBilinearRGBA(
   const scaleY = srcH / dstH;
 
   for (let dy = 0; dy < dstH; dy++) {
-    let sy = (dy + 0.5) * scaleY - 0.5;
+    const sy = (dy + 0.5) * scaleY - 0.5;
     let y0 = Math.floor(sy);
     let wy: number;
     if (y0 < 0) {
@@ -177,7 +177,7 @@ function resizeBilinearRGBA(
     const row1 = y1 * srcW;
 
     for (let dx = 0; dx < dstW; dx++) {
-      let sx = (dx + 0.5) * scaleX - 0.5;
+      const sx = (dx + 0.5) * scaleX - 0.5;
       let x0 = Math.floor(sx);
       let wx: number;
       if (x0 < 0) {

@@ -84,6 +84,46 @@ backend/.venv/Scripts/python tools/regression/check_upright.py e2e <label> right
 * `switches.js`: do the Orientation and Model switches of the header constrain each other as `wingOptions.ts` says (the precise model with the right orientation is allowed,
   with the left one it is not)? It clicks through a row of steps in the real page and needs no backend.
 
+## The review and the upload screens: a change that must not be seen (`review-trace.js`)
+
+`review-trace.js` drives the review screen and the upload screen through a fixed list of 90 steps: the photos with the arrows, the buttons and the list, the zoom slider,
+ctrl and the wheel (also in bursts), dragging the picture, the name field, the Edit, Reset, logo and back-button dialogs, the export dialog, language and theme, Delete, Edit
+back to the upload screen and the preview window. After every step it records what the page shows: the HTML of the app (blob addresses, thumbnails and the sizes read in the
+background are normalised), the values of the inputs, the focus and selection, the scroll of the list, the history state, the language and the dialogs. `compare-trace.mjs`
+compares two traces step by step. Made for the lint fixes: the trace of `main` and of the branch had to be identical, and it is, also on the production bundles.
+
+```js
+const get = async (p) => (0, eval)(await (await fetch(`http://127.0.0.1:8765/regression/${p}`, { cache: "no-store" })).text());
+// once, with the backend running: record its answers (replay.js keeps them in window.__RECORDED)
+window.__REPLAY = null;
+await get("replay.js");
+Object.assign(window, { __SCENARIO: "S1", __ORIENT: "right", __LABEL: "trace-setup" });
+await get("run.js");
+await fetch("http://127.0.0.1:8765/regression/collect/trace-responses", { method: "POST", body: JSON.stringify(window.__RECORDED) });
+// every run, on a freshly loaded page, without the backend: the recorded answers are replayed
+window.__REPLAY = await (await fetch("http://127.0.0.1:8765/regression/work/collected-trace-responses.json")).json();
+await get("replay.js");
+Object.assign(window, { __SCENARIO: "S1", __ORIENT: "right", __LABEL: "trace-setup" });
+await get("run.js");                       // uploads, Detect, Process: the page is left on the review screen
+window.__LABEL = "main-1";
+await get("review-trace.js");              // work/collected-trace-main-1.json
+```
+
+```
+node tools/regression/compare-trace.mjs main-1 branch-1     # exit code 0: every step shows the same thing
+```
+
+* To compare two versions of the code, serve each from its own copy (`git worktree add`, `npm ci`, `npx vite --port 5199`), not one after the other from one tree, and use the same tab.
+* The two pages must be in the same state. Open each of them once before the first run (a new address has no detection model in its cache, and the header shows "Ready"
+  only after that), and give the tab a fixed size that fits in the pane (`resize_window`, for example 1000 by 700). The pane is sometimes drawn with a pixel ratio of 1.25, a
+  border is then 0.8 of a pixel and the picture is measured a little differently: the size of the points and the result of a drag change. `compare-trace.mjs` does not count a step
+  that differs only in the size of the points, and prints the measured sizes of both runs for any other step; with a different `devicePixelRatio` in the two runs, run them again.
+* Does the trace see what it should? Break the code on purpose (do not reset the zoom when the photo changes, open the wrong dialog for the back button, drop the blur of the
+  zoom field) and the steps that depend on it differ. The steps are listed in the file; add one when a change touches something that no step reaches.
+
+`review-bench.js` counts, for the same kinds of events, the commits of React and the renders of the review screen, from what the dev build of React 19 writes with
+`console.timeStamp`. A stopwatch is useless in a hidden pane (it depends on whether the window draws frames), the counts are not. Run it after `run.js` like `review-trace.js`.
+
 ## Notes for working in the Browser pane
 
 * A hidden pane waits about a second in every `canvas.toBlob`, and `img.decode()` never settles there: use `onload`. The tool gives a script 45 seconds,
