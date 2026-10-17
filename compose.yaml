@@ -3,31 +3,26 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: backend
     expose:
       - "8000"
     volumes:
-      - ./backend/models:/app/backend/models
+      - ./backend/models:/app/backend/models:ro
     restart: unless-stopped
 
   frontend:
-    build: 
+    build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: frontend
     expose:
       - "80"
     restart: unless-stopped
 
   nginx:
-    image: nginx:latest
-    container_name: nginx-proxy
+    image: nginx:stable-alpine
     ports:
-      - "80:80"
-      - "443:443"
+      - "${WINGAI_HTTP_BIND:-127.0.0.1}:${WINGAI_HTTP_PORT:-8080}:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - /etc/ssl/IIPW:/etc/nginx/ssl:ro
+      - "${WINGAI_NGINX_CONF:-./nginx.conf}:/etc/nginx/nginx.conf:ro"
     depends_on:
       - backend
       - frontend
