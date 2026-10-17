@@ -1,5 +1,5 @@
 # FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
-FROM python:3.12-slim
+FROM python:3.13-slim
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 
@@ -12,6 +12,8 @@ WORKDIR /app/backend
 
 COPY pyproject.toml uv.lock ./
 ENV UV_NO_DEV=1
+# Use the Python of the image. Without this uv downloads the newest Python, and PyTorch has no wheel for it yet.
+ENV UV_PYTHON_DOWNLOADS=never
 
 RUN uv sync --frozen --no-cache
 
