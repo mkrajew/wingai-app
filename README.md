@@ -22,11 +22,21 @@
   <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white">
 </p>
 
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#using-the-application">Using the application</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#tools">Tools</a>
+</p>
+
 ## About
 
-WingAI is a program for automatic detection of landmarks on honey bee forewings. It places the 19 landmarks on each wing photo, lets you check and correct them, and exports the results.
+**WingAI is a system for fully automatic detection of landmarks on the wings of the honey bee (*Apis mellifera*).** Drop in raw photos of wings and get back the numbered landmarks of every wing, ready for morphometric analysis.
 
-WingAI runs online at **https://wingai.ii.pw.edu.pl**. It needs no installation and no account. This repository holds the web application, built for the Warsaw University of Technology. Model training and evaluation live in the [bees](https://github.com/mkrajew/bees) repository.
+An optional YOLO detector finds each wing in a photo and crops it, a U-Net places the 19 homologous landmarks of the forewing, and a Procrustes match to the mean wing shape numbers them, so that every point means the same thing in every wing of the sample. Wings in any pose can be mirrored and turned to one side, wings that need a second look are flagged, and any point can be corrected by hand. Results are exported as a CSV or as PNG images with the landmarks embedded for IdentiFly.
+
+WingAI runs online at **https://wingai.ii.pw.edu.pl**, with no installation and no account. This repository holds the application, so that you can also [run it on your own computer](#run-locally-with-docker). It was built for the Warsaw University of Technology. Model training and evaluation live in the [bees](https://github.com/mkrajew/bees) repository.
 
 ## Features
 
@@ -88,12 +98,49 @@ The **Help** button in the header lists the keyboard shortcuts.
 
 ### Requirements
 
-- Production: Docker with Compose
-- Development: Python 3.13 with [uv](https://docs.astral.sh/uv/), and Node.js 20.19 or newer (22.18 or newer to run the tests)
+- **Docker** with Compose (Docker Desktop on Windows and macOS), to run WingAI in containers.
+- **Python 3.13** with [uv](https://docs.astral.sh/uv/), and **Node.js 20.19** or newer (22.18 or newer to run the tests), to work on the code, see [Development](#development).
+
+No GPU is needed: the backend runs on the CPU.
+
+### Run locally with Docker
+
+WingAI can be self-hosted using Docker Compose.
+
+Trained model weights are not distributed with this repository. Users must provide compatible model files before starting the application.
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/mkrajew/wingai-app.git
+   cd wingai-app
+   ```
+
+2. Place the following files in `backend/models/`:
+
+   - final-precise.ckpt
+   - final-rotation-2.ckpt
+   - mean_shape.pth
+
+3. Optionally, place `best-dota.onnx` in `frontend/public/models/` to enable browser-based wing detection and cropping.
+
+4. Start WingAI:
+
+   ```bash
+   docker compose up
+   ```
+
+5. Open http://localhost:8080
+
+No environment variables, SSL certificates or additional configuration files are required for local deployment.
+
+The models must be compatible with the architectures and preprocessing pipeline implemented in this repository. See the [`bees`](https://github.com/mkrajew/bees) repository for model training and evaluation.
+
+The first build downloads the dependencies, PyTorch among them, and can take a few minutes. After a start the backend needs a moment to load the models, and until it is ready nginx answers `502` to the requests of the app.
+
+To stop WingAI, press `Ctrl+C` or run `docker compose down`. Add `-d` to `docker compose up` to run it in the background. After you pull a new version, or add the detector later, run `docker compose up --build` to rebuild the images.
 
 ### Model files
-
-The trained weights are not part of the repository, and the folders that hold them are git-ignored. Add them before you start:
 
 | File | Folder | Purpose |
 | --- | --- | --- |
@@ -102,7 +149,17 @@ The trained weights are not part of the repository, and the folders that hold th
 | `mean_shape.pth` | `backend/models/` | mean wing shape for landmark matching |
 | `best-dota.onnx` | `frontend/public/models/` | wing detector (optional) |
 
-The backend loads the three files in `backend/models/` at startup and stops with an error when one is missing. The weights come from the training pipeline in [bees](https://github.com/mkrajew/bees).
+The files in these folders are git-ignored. The backend loads the three files in `backend/models/` at startup and stops with an error when one is missing. It reads them once, so after you change them run `docker compose restart backend`. Without the detector, upload photos of single wings that are already cut. The frontend image copies `frontend/public/` into the site, so the detector has to be in place when the image is built. The weights come from the training pipeline in [bees](https://github.com/mkrajew/bees).
+
+### Configuration
+
+The defaults need no configuration. To change them, set the variables below in a `.env` file next to `compose.yaml` (the file is git-ignored) or in your shell.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `WINGAI_HTTP_PORT` | `8080` | Port on your computer. |
+| `WINGAI_HTTP_BIND` | `127.0.0.1` | Address that the port is published on. The default makes WingAI reachable from this computer only, `0.0.0.0` from the whole network. |
+| `WINGAI_NGINX_CONF` | `./nginx.conf` | nginx configuration that is mounted into the proxy container. |
 
 ### Development
 
@@ -124,71 +181,18 @@ npm ci
 npm run dev
 ```
 
-The dev server runs on `http://localhost:5173`. The app calls the backend under `/api`, and nginx strips that prefix in production. For development, add the same behaviour to `frontend/vite.config.ts`:
-
-```ts
-export default defineConfig({
-  // ...existing options
-  server: {
-    proxy: {
-      "/api": {
-        target: "http://localhost:8000",
-        rewrite: (path) => path.replace(/^\/api/, ""),
-      },
-    },
-  },
-});
-```
+The dev server runs on `http://localhost:5173`. The app calls the backend under `/api`: the dev server forwards these requests to `http://127.0.0.1:8000` and removes the prefix, as nginx does in the Docker setup (see `server.proxy` in `frontend/vite.config.ts`). The model files are needed here too, see [Model files](#model-files).
 
 `npm run lint` runs ESLint, `npm test` runs the unit tests (Node.js 22.18 or newer, which runs the TypeScript as it is, with no extra packages) and `npm run build` type-checks the app and the tests and builds the production bundle.
 
-### Production with Docker Compose
+More detail is in [`backend/README.md`](backend/README.md), which also documents the API, and in [`frontend/README.md`](frontend/README.md).
 
-```bash
-docker compose up -d --build
-```
+## Tools
 
-| Service | Role |
-| --- | --- |
-| `backend` | FastAPI on port 8000, mounts `./backend/models` |
-| `frontend` | The built app, served by nginx |
-| `nginx` | Reverse proxy on ports 80 and 443. It forwards `/` to the frontend and `/api/` to the backend. |
+`tools/` holds measurements and checks. They are not part of the application and are not built into the images.
 
-Put `best-dota.onnx` into `frontend/public/models/` before you build the frontend image. The build copies it into the site.
-
-The included `nginx.conf` and the certificate mount (`/etc/ssl/IIPW`) belong to the wingai.ii.pw.edu.pl deployment. For another host, change `server_name`, the certificate paths and the certificate mount in `docker-compose.yml`.
-
-## API
-
-`GET /` returns a short JSON greeting and works as a health check.
-
-`POST /analyze` takes `multipart/form-data`:
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `file` | file | Wing image, PNG or JPEG |
-| `x_size` | integer | Width of the image in pixels |
-| `y_size` | integer | Height of the image in pixels |
-| `model` | string | `precise` or `rotation` (default `rotation`) |
-
-```bash
-curl -F "file=@wing.png" -F "x_size=700" -F "y_size=270" -F "model=rotation" \
-  http://localhost:8000/analyze
-```
-
-```jsonc
-{
-  "coords": [190.24, 149.2, 208.42, 150.34], // shortened: a real response has 38 numbers
-  "check": false,
-  "orientation": "right"
-}
-```
-
-- `coords`: 38 numbers (`x1, y1, ..., x19, y19`) in pixels of the uploaded image, with the origin at the top-left corner.
-- `check`: `true` when a person should review the result.
-- `orientation`: `left` or `right`, the handedness of the wing relative to the mean shape.
-
-Errors: `422` for an empty or unreadable image, `500` when the analysis fails.
+- [`tools/pose`](tools/pose/README.md): reading the pose of a wing from its pixels. How it was measured, the templates, the vectors that the unit tests compare with, and the [report](tools/pose/REPORT.md).
+- [`tools/regression`](tools/regression/README.md): browser scripts that run the real flow of the app (upload, Detect, the backend, the review screen) and record what the backend receives and what the review shows, so that the same run before and after a change can be compared.
 
 ## Repository layout
 
@@ -205,8 +209,9 @@ Errors: `422` for an empty or unreadable image, `500` when the analysis fails.
 ├── tools/                measurements and checks, not part of the app
 │   ├── pose/             reading the pose of a wing from its pixels: tests, report, template
 │   └── regression/       browser scripts that compare what Process does before and after a change
-├── docker-compose.yml    production stack
-└── nginx.conf            reverse proxy and TLS
+├── compose.yaml          Docker Compose stack: backend, frontend, nginx
+├── nginx.conf            reverse proxy of the stack, plain HTTP
+└── LICENSE               GNU General Public License v3.0
 ```
 
 ## Tech stack
