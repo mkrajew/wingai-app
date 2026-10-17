@@ -55,7 +55,7 @@ The **Load model** button of the header panel downloads `public/models/best-dota
 
 ### Orientation from pixels
 
-When a side is chosen, the browser turns every wing to it before the request. `src/utils/poseFromPixels.ts` shrinks the crop to 256 x 96 gray pixels (`areaResize.ts` does this exactly as OpenCV's `INTER_AREA`), builds histograms of gradient directions in 16 x 6 cells and compares them with the average wing of each of the four poses (`poseTemplates.ts`, generated from the Python reference in [`tools/pose`](../tools/pose/README.md)). The best pose wins and is trusted when it beats the second best by at least 0.10. A wing whose pose is not read with confidence is left as it is. `src/utils/orientPicture.ts` applies the reading and turns the picture on a canvas.
+When a side is chosen, the browser turns every wing to it before the request. `src/utils/poseFromPixels.ts` shrinks the crop to 256 x 96 gray pixels (`areaResize.ts` does this exactly as OpenCV's `INTER_AREA`), builds histograms of gradient directions in 16 x 6 cells and compares them with the average wing of each of the four poses (`poseTemplates.ts`, generated offline by a Python reference). The best pose wins and is trusted when it beats the second best by at least 0.10. A wing whose pose is not read with confidence is left as it is. `src/utils/orientPicture.ts` applies the reading and turns the picture on a canvas.
 
 The two switches of the header choose the model and the orientation, and `planRequest` in `src/utils/wingOptions.ts` turns them into what happens before and after the request. The switches never allow the `precise` model with the left orientation.
 
@@ -108,9 +108,7 @@ frontend
 
 ## Tests
 
-`npm test` runs `node --test "tests/**/*.test.ts"`. Node.js 22.18 or newer runs TypeScript as it is, so the tests need no extra packages and no build. They cover the pure modules: area shrinking, the reading of the pose, turning pictures and landmarks, zoom and pan, file names, the state of the photos, the switches and Detect over a list. The pose reading is compared with vectors that the Python reference produced (`tests/fixtures/pose-golden.json`, made by [`tools/pose`](../tools/pose/README.md)), and the area shrinking is checked bit for bit against OpenCV. `tests/helpers.ts` makes the test pictures from integer formulas that the reference uses too.
-
-To check that a change does not alter what **Process** does, use the browser scripts in [`tools/regression`](../tools/regression/README.md).
+`npm test` runs `node --test "tests/**/*.test.ts"`. Node.js 22.18 or newer runs TypeScript as it is, so the tests need no extra packages and no build. They cover the pure modules: area shrinking, the reading of the pose, turning pictures and landmarks, zoom and pan, file names, the state of the photos, the switches and Detect over a list. The pose reading is compared with vectors that the Python reference produced (`tests/fixtures/pose-golden.json`), and the area shrinking is checked bit for bit against OpenCV. `tests/helpers.ts` makes the test pictures from integer formulas that the reference uses too.
 
 ## Build and Docker image
 

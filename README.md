@@ -26,8 +26,7 @@
   <a href="#features">Features</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#using-the-application">Using the application</a> ·
-  <a href="#getting-started">Getting started</a> ·
-  <a href="#tools">Tools</a>
+  <a href="#getting-started">Getting started</a>
 </p>
 
 ## About
@@ -75,7 +74,7 @@ flowchart LR
 
 A wing cropped by the detector lies in one of four poses: a right or a left wing, upright or upside down. The app shrinks the picture to 256 x 96 gray pixels, builds histograms of the directions of its gradients in a grid of 16 x 6 cells, and compares them with the average wing in each of the four poses (made from the complete wings of 13 countries). The best pose wins, and it is trusted when it beats the second best by a margin of 0.10. The step takes about 25 ms for a crop of 2200 x 950 pixels.
 
-Among 5 104 well cut wings that the detector found in all four poses (real photos, and wings of databases put on a canvas like a photo) it made no mistake, and the smallest margin of a right answer was above 0.3. A wing that is only a fragment, cut by the border of the photo, can be read confidently wrong. The `rotation` model corrects that after the answer. On wings turned to the right, the `precise` model finds the manual landmarks more accurately than the `rotation` model, by 0.3 px on average, in a test on 745 wings that the models did not see in training. [`tools/pose/REPORT.md`](tools/pose/REPORT.md) has the numbers.
+Among 5 104 well cut wings that the detector found in all four poses (real photos, and wings of databases put on a canvas like a photo) it made no mistake, and the smallest margin of a right answer was above 0.3. A wing that is only a fragment, cut by the border of the photo, can be read confidently wrong. The `rotation` model corrects that after the answer. On wings turned to the right, the `precise` model finds the manual landmarks more accurately than the `rotation` model, by 0.3 px on average, in a test on 745 wings that the models did not see in training.
 
 ## Using the application
 
@@ -187,13 +186,6 @@ The dev server runs on `http://localhost:5173`. The app calls the backend under 
 
 More detail is in [`backend/README.md`](backend/README.md), which also documents the API, and in [`frontend/README.md`](frontend/README.md).
 
-## Tools
-
-`tools/` holds measurements and checks. They are not part of the application and are not built into the images.
-
-- [`tools/pose`](tools/pose/README.md): reading the pose of a wing from its pixels. How it was measured, the templates, the vectors that the unit tests compare with, and the [report](tools/pose/REPORT.md).
-- [`tools/regression`](tools/regression/README.md): browser scripts that run the real flow of the app (upload, Detect, the backend, the review screen) and record what the backend receives and what the review shows, so that the same run before and after a change can be compared.
-
 ## Repository layout
 
 ```
@@ -206,9 +198,6 @@ More detail is in [`backend/README.md`](backend/README.md), which also documents
 │   ├── src/              components, utilities, translations
 │   ├── tests/            unit tests (npm test) and the vectors they compare with
 │   └── public/           logo, icons, detector model (git-ignored)
-├── tools/                measurements and checks, not part of the app
-│   ├── pose/             reading the pose of a wing from its pixels: tests, report, template
-│   └── regression/       browser scripts that compare what Process does before and after a change
 ├── compose.yaml          Docker Compose stack: backend, frontend, nginx
 ├── nginx.conf            reverse proxy of the stack, plain HTTP
 └── LICENSE               GNU General Public License v3.0

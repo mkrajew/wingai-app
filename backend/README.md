@@ -149,4 +149,4 @@ FastAPI, Uvicorn, python-multipart, PyTorch and torchvision (CPU build, from the
 
 - The service keeps nothing: no uploaded image, no result, no state besides the loaded models.
 - It has no authentication and no request limit. In the Docker setup nginx sits in front of it and limits an upload to 100 MB.
-- The backend has no unit tests of its own. The browser scripts in [`tools/regression`](../tools/regression/README.md) run the whole flow of the app against a running backend and record what it receives and answers, so that a change can be compared with the previous behaviour.
+- The backend has no unit tests of its own.

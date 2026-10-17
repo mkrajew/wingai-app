@@ -14,8 +14,8 @@
  * each of the four poses (poseTemplates.ts). The pose with the highest correlation wins, and the reading is `sure` when it wins from the
  * second best by at least POSE_SURE_MARGIN.
  *
- * Python reference of every step: tools/pose (features.py, common.py). tools/pose/REPORT.md has the measurements; the vectors that
- * tests/ compares with are made by tools/pose/make_golden.py.
+ * Every step has a Python reference (not part of this repository) that the measurements were made with; the vectors that
+ * tests/ compares with (tests/fixtures/pose-golden.json) come from it.
  */
 import { shrinkArea } from "./areaResize.ts";
 import type { Turn } from "./landmarks.ts";
