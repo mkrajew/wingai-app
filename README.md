@@ -251,13 +251,6 @@ To go back, check out an earlier commit (`git checkout <commit>`) and repeat ste
 
 The backend loads its models once, at startup. After you change files in `backend/models/`, restart it with `docker compose restart backend`.
 
-### Troubleshooting
-
-- **502 Bad Gateway after a start or an update.** The backend is still loading its models, which takes a moment, or nginx points at an old container address. Wait a little. If it stays, run `docker compose restart nginx`.
-- **The backend container exits at start.** A model file is missing or has another name. `docker compose logs backend` ends with the name of the file.
-- **The detector does not load.** `best-dota.onnx` was not in `frontend/public/models/` when the frontend image was built. `curl -I https://wingai.ii.pw.edu.pl/models/best-dota.onnx` has to answer `200`. Add the file and run `docker compose up -d --build frontend`.
-- **`curl` run on the server itself reports a certificate error (60).** The site works in browsers. Check it from another machine, or on the server talk to nginx directly: `curl -sk --resolve wingai.ii.pw.edu.pl:443:127.0.0.1 https://wingai.ii.pw.edu.pl/api/`.
-
 ## API
 
 `GET /` returns a short JSON greeting and works as a health check.
