@@ -1,5 +1,5 @@
-// Pictures made by integer formulas, and the golden vectors of tools/pose/make_golden.py. The formulas are the same as in that
-// script, so a picture made here is, pixel for pixel, the picture that the Python reference was given.
+// Pictures made by integer formulas, and the golden vectors of the Python reference (fixtures/pose-golden.json). The formulas are the same as in the
+// script that made them, so a picture made here is, pixel for pixel, the picture that the Python reference was given.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 

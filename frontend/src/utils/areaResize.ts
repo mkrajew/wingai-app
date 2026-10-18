@@ -3,8 +3,8 @@
  *
  * It does what OpenCV's `cv2.resize(plane, size, interpolation=cv2.INTER_AREA)` does, in the same float32 arithmetic and in the same
  * order, so that the result is the same byte for byte. The templates that read the pose of a wing (see poseFromPixels.ts) were made
- * from pictures shrunk by OpenCV, and a picture that is shrunk the same way gives the same reading. tools/pose/make_golden.py makes
- * the vectors that the tests compare with.
+ * from pictures shrunk by OpenCV, and a picture that is shrunk the same way gives the same reading. The vectors that the tests
+ * compare with (tests/fixtures/pose-golden.json) were made by a Python reference that shrinks the pictures with OpenCV.
  */
 
 type Plane = Uint8Array | Uint8ClampedArray;

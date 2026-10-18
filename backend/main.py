@@ -1,3 +1,4 @@
+import os
 import asyncio
 from dataclasses import dataclass
 from enum import StrEnum
@@ -51,9 +52,12 @@ MODEL_SPECS = {
     # chirality, so landmarks are matched by rotation alone -- handle_coordinates'
     # defaults, which is also how the bees evaluation runs this checkpoint. A
     # mirrored or rotated wing simply comes out flagged (check_carefully).
-    WingModel.precise: ModelSpec("final-precise.ckpt", {}),
+    WingModel.precise: ModelSpec(
+        os.getenv("WINGAI_PRECISE_MODEL", "precise.ckpt"),
+        {},
+    ),
     WingModel.rotation: ModelSpec(
-        "final-rotation-2.ckpt",
+        os.getenv("WINGAI_ROTATION_MODEL", "rotation.ckpt"),
         # allow_reflection=True: the model may detect landmarks on a
         # horizontally-mirrored wing too, which a rotation-only match can't
         # align correctly against mean_coords even when detection itself is
@@ -69,6 +73,41 @@ MODEL_SPECS = {
     ),
 }
 DEFAULT_MODEL = WingModel.rotation
+# Name of the file with the mean wing shape, in the models folder.
+MEAN_SHAPE_FILE = os.getenv("WINGAI_MEAN_SHAPE", "mean_shape.pth")
+
+
+class ModelFilesNotFound(RuntimeError):
+    """A file that the service loads at startup is missing from the models folder."""
+
+
+def check_model_files() -> None:
+    """Stop the startup with a readable message when a model file is missing.
+
+    Without it the first missing file surfaces as the FileNotFoundError of PyTorch,
+    after the models before it were loaded, and the other missing files stay unseen.
+    """
+    files = [
+        ("WINGAI_PRECISE_MODEL", MODEL_SPECS[WingModel.precise].checkpoint),
+        ("WINGAI_ROTATION_MODEL", MODEL_SPECS[WingModel.rotation].checkpoint),
+        ("WINGAI_MEAN_SHAPE", MEAN_SHAPE_FILE),
+    ]
+    missing = [(var, name) for var, name in files if not (MODELS_DIR / name).is_file()]
+    if not missing:
+        return
+
+    # The folder as it is named in the repository, also inside the container.
+    folder = f"{MODELS_DIR.parent.name}/{MODELS_DIR.name}"
+    variables = ", ".join(var for var, _ in missing)
+    advice = (
+        "Provide a compatible model file or set"
+        if len(missing) == 1
+        else "Provide compatible model files or set"
+    )
+    lines = ["WingAI startup failed:"]
+    lines += [f"Model file not found: {folder}/{name}" for _, name in missing]
+    lines += ["", advice, f"{variables} in your .env file."]
+    raise ModelFilesNotFound("\n".join(lines))
 
 
 def load_net(checkpoint: str, device: torch.device) -> LitNet:
@@ -88,6 +127,9 @@ def load_net(checkpoint: str, device: torch.device) -> LitNet:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail first, with a readable message, when a model file is missing.
+    check_model_files()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Every model is loaded once, here, and stays in memory while the server runs.
@@ -95,7 +137,10 @@ async def lifespan(app: FastAPI):
         name: load_net(spec.checkpoint, device) for name, spec in MODEL_SPECS.items()
     }
 
-    mean_coords = torch.load(MODELS_DIR / "mean_shape.pth", weights_only=False)
+    mean_coords = torch.load(
+        MODELS_DIR / MEAN_SHAPE_FILE,
+        weights_only=False,
+    )
 
     preprocess = partial(unet_fit_rectangle_preprocess, output_size=400)
 
@@ -173,8 +218,10 @@ def process_image(image, model_name: WingModel):
     # identify landmarks on a mirrored wing, so its value is only meaningful
     # when check_carefully is False.)
     r = procrustes_align(
-        normalize_shape(center_shape(coordinates)), models["shape"],
-        only_matrix=True, allow_reflection=True,
+        normalize_shape(center_shape(coordinates)),
+        models["shape"],
+        only_matrix=True,
+        allow_reflection=True,
     )
     orientation = "left" if torch.det(r).item() < 0 else "right"
 

@@ -10,4 +10,5 @@ wheels/
 .venv
 
 # Models
-models/
+models/*
+!models/.gitkeep
