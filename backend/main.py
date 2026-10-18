@@ -1,3 +1,4 @@
+import os
 import asyncio
 from dataclasses import dataclass
 from enum import StrEnum
@@ -51,9 +52,12 @@ MODEL_SPECS = {
     # chirality, so landmarks are matched by rotation alone -- handle_coordinates'
     # defaults, which is also how the bees evaluation runs this checkpoint. A
     # mirrored or rotated wing simply comes out flagged (check_carefully).
-    WingModel.precise: ModelSpec("final-precise.ckpt", {}),
+    WingModel.precise: ModelSpec(
+        os.getenv("WINGAI_PRECISE_MODEL", "precise.ckpt"),
+        {},
+    ),
     WingModel.rotation: ModelSpec(
-        "final-rotation-2.ckpt",
+        os.getenv("WINGAI_ROTATION_MODEL", "rotation.ckpt"),
         # allow_reflection=True: the model may detect landmarks on a
         # horizontally-mirrored wing too, which a rotation-only match can't
         # align correctly against mean_coords even when detection itself is
@@ -95,7 +99,10 @@ async def lifespan(app: FastAPI):
         name: load_net(spec.checkpoint, device) for name, spec in MODEL_SPECS.items()
     }
 
-    mean_coords = torch.load(MODELS_DIR / "mean_shape.pth", weights_only=False)
+    mean_coords = torch.load(
+        MODELS_DIR / os.getenv("WINGAI_MEAN_SHAPE", "mean_shape.pth"),
+        weights_only=False,
+    )
 
     preprocess = partial(unet_fit_rectangle_preprocess, output_size=400)
 
@@ -173,8 +180,10 @@ def process_image(image, model_name: WingModel):
     # identify landmarks on a mirrored wing, so its value is only meaningful
     # when check_carefully is False.)
     r = procrustes_align(
-        normalize_shape(center_shape(coordinates)), models["shape"],
-        only_matrix=True, allow_reflection=True,
+        normalize_shape(center_shape(coordinates)),
+        models["shape"],
+        only_matrix=True,
+        allow_reflection=True,
     )
     orientation = "left" if torch.det(r).item() < 0 else "right"
 

@@ -21,7 +21,7 @@ npm ci
 npm run dev
 ```
 
-The dev server runs on http://localhost:5173. The app calls the backend under `/api`: the dev server (`server.proxy` in `vite.config.ts`) forwards these requests to the backend on `http://127.0.0.1:8000` and removes the prefix, as nginx does in the Docker setup. Start the backend first, see the [main README](../README.md#development). The optional wing detector goes to `public/models/best-dota.onnx`. The files in that folder are git-ignored, and for the Docker image the file has to be there before the image is built.
+The dev server runs on http://localhost:5173. The app calls the backend under `/api`: the dev server (`server.proxy` in `vite.config.ts`) forwards these requests to the backend on `http://127.0.0.1:8000` and removes the prefix, as nginx does in the Docker setup. Start the backend first, see the [main README](../README.md#development). The optional wing detector goes to `public/models/detector.onnx`. The files in that folder are git-ignored, and for the Docker image the file has to be there before the image is built.
 
 | Command | What it does |
 | --- | --- |
@@ -51,7 +51,7 @@ The app has two screens, **upload** and **review**, and keeps all of its state i
 
 The detector is an oriented-box YOLO model in ONNX format, run in the browser with ONNX Runtime Web (WebAssembly, one thread). `src/utils/yoloDetector.ts` letterboxes the photo into the input of the model (its declared size, or 640 px when the model accepts any size), runs it and decodes the rows of the output: centre, size, confidence, class and angle, with the NMS already applied by the model. Detections with a confidence below 0.25 are dropped. `src/utils/obb.ts` holds the geometry of the rotated boxes, and `src/utils/obbCrop.ts` cuts the part of a photo inside a box, turned so that its long side is horizontal.
 
-The **Load model** button of the header panel downloads `public/models/best-dota.onnx` and keeps it in the Cache Storage of the browser (`wingai-models-v1`), so the next visit does not download it again. Detect fails until the model is loaded.
+The **Load model** button of the header panel downloads `public/models/detector.onnx` (the address is `MODEL_URL` in `src/utils/modelCache.ts`) and keeps it in the Cache Storage of the browser (`wingai-models-v1`), so the next visit does not download it again. Detect fails until the model is loaded.
 
 ### Orientation from pixels
 

@@ -7,6 +7,11 @@ services:
       - "8000"
     volumes:
       - ./backend/models:/app/backend/models:ro
+    environment:
+      WINGAI_PRECISE_MODEL: ${WINGAI_PRECISE_MODEL:-precise.ckpt}
+      WINGAI_ROTATION_MODEL: ${WINGAI_ROTATION_MODEL:-rotation.ckpt}
+      WINGAI_MEAN_SHAPE: ${WINGAI_MEAN_SHAPE:-mean_shape.pth}
+
     restart: unless-stopped
 
   frontend:

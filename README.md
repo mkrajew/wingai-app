@@ -117,11 +117,11 @@ Trained model weights are not distributed with this repository. Users must provi
 
 2. Place the following files in `backend/models/`:
 
-   - final-precise.ckpt
-   - final-rotation-2.ckpt
+   - precise.ckpt
+   - rotation.ckpt
    - mean_shape.pth
 
-3. Optionally, place `best-dota.onnx` in `frontend/public/models/` to enable browser-based wing detection and cropping.
+3. Optionally, place `detector.onnx` in `frontend/public/models/` to enable browser-based wing detection and cropping.
 
 4. Start WingAI:
 
@@ -143,22 +143,27 @@ To stop WingAI, press `Ctrl+C` or run `docker compose down`. Add `-d` to `docker
 
 | File | Folder | Purpose |
 | --- | --- | --- |
-| `final-precise.ckpt` | `backend/models/` | `precise` landmark model |
-| `final-rotation-2.ckpt` | `backend/models/` | `rotation` landmark model |
+| `precise.ckpt` | `backend/models/` | `precise` landmark model |
+| `rotation.ckpt` | `backend/models/` | `rotation` landmark model |
 | `mean_shape.pth` | `backend/models/` | mean wing shape for landmark matching |
-| `best-dota.onnx` | `frontend/public/models/` | wing detector (optional) |
+| `detector.onnx` | `frontend/public/models/` | wing detector (optional) |
 
-The files in these folders are git-ignored. The backend loads the three files in `backend/models/` at startup and stops with an error when one is missing. It reads them once, so after you change them run `docker compose restart backend`. Without the detector, upload photos of single wings that are already cut. The frontend image copies `frontend/public/` into the site, so the detector has to be in place when the image is built. The weights come from the training pipeline in [bees](https://github.com/mkrajew/bees).
+The files in these folders are git-ignored. The names above are the defaults. If your files are named differently, set their names in `.env` instead of renaming them, see [Configuration](#configuration). The backend loads the three files in `backend/models/` at startup and stops with an error when one is missing. It reads them once, so after you change them run `docker compose restart backend`. Without the detector, upload photos of single wings that are already cut. The frontend image copies `frontend/public/` into the site, so the detector has to be in place when the image is built. The weights come from the training pipeline in [bees](https://github.com/mkrajew/bees).
 
 ### Configuration
 
-The defaults need no configuration. To change them, set the variables below in a `.env` file next to `compose.yaml` (the file is git-ignored) or in your shell.
+The defaults need no configuration. To change them, set the variables below in a `.env` file next to `compose.yaml` (the file is git-ignored; [`.env.example`](.env.example) is a template) or in your shell.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `WINGAI_HTTP_PORT` | `8080` | Port on your computer. |
 | `WINGAI_HTTP_BIND` | `127.0.0.1` | Address that the port is published on. The default makes WingAI reachable from this computer only, `0.0.0.0` from the whole network. |
 | `WINGAI_NGINX_CONF` | `./nginx.conf` | nginx configuration that is mounted into the proxy container. |
+| `WINGAI_PRECISE_MODEL` | `precise.ckpt` | Name of the `precise` checkpoint in `backend/models/`. |
+| `WINGAI_ROTATION_MODEL` | `rotation.ckpt` | Name of the `rotation` checkpoint in `backend/models/`. |
+| `WINGAI_MEAN_SHAPE` | `mean_shape.pth` | Name of the mean wing shape file in `backend/models/`. |
+
+After you change `.env`, run `docker compose up -d`: it re-creates the containers whose settings changed, while `docker compose restart` keeps the old values.
 
 ### Development
 
@@ -171,6 +176,12 @@ uv run uvicorn main:app --port 8000
 ```
 
 The API listens on `http://localhost:8000`, with interactive documentation at `/docs`.
+
+The backend expects the model files under the default names from [Model files](#model-files). If yours are named differently, let uvicorn read the names from the `.env` file of the repository (it does not read `.env` by itself):
+
+```bash
+uv run uvicorn --env-file ../.env main:app --port 8000
+```
 
 Start the frontend in a second terminal:
 

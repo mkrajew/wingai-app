@@ -30,17 +30,19 @@ The API listens on `http://localhost:8000`, with interactive documentation at `/
 
 ### Model files
 
-| File | Purpose |
-| --- | --- |
-| `models/final-precise.ckpt` | checkpoint of the `precise` model |
-| `models/final-rotation-2.ckpt` | checkpoint of the `rotation` model |
-| `models/mean_shape.pth` | the mean wing shape that the points are matched to |
+| File | Variable | Purpose |
+| --- | --- | --- |
+| `models/precise.ckpt` | `WINGAI_PRECISE_MODEL` | checkpoint of the `precise` model |
+| `models/rotation.ckpt` | `WINGAI_ROTATION_MODEL` | checkpoint of the `rotation` model |
+| `models/mean_shape.pth` | `WINGAI_MEAN_SHAPE` | the mean wing shape that the points are matched to |
+
+These are the default names. A file with another name is used by setting its variable to that name (relative to `models/`), for example `WINGAI_PRECISE_MODEL=final-precise.ckpt`. The service reads the variables once, when it starts. uvicorn does not read `.env` by itself: `uv run uvicorn --env-file ../.env main:app --port 8000` takes them from the `.env` file of the repository, see [Configuration](../README.md#configuration).
 
 The weights are not part of the repository and the files in `models/` are git-ignored, so add them yourself. The service loads all three at startup and stops with an error when one is missing. Restart it after you change them. The checkpoints and the mean shape are Python pickles, so use only files that you trust. The weights come from the training pipeline in [bees](https://github.com/mkrajew/bees).
 
 ### Docker
 
-The image is built from `python:3.13-slim`. `uv sync --frozen` installs exactly what `uv.lock` says, and `UV_PYTHON_DOWNLOADS=never` makes uv use the Python of the image instead of downloading another one. The system libraries that OpenCV needs (`libgl1`, `libglib2.0-0`) are installed too. The image holds `main.py` and `wings/` but no models: mount the folder at `/app/backend/models`. The container listens on port 8000. Docker Compose starts it and nginx forwards `/api/` to it, see [Run locally with Docker](../README.md#run-locally-with-docker).
+The image is built from `python:3.13-slim`. `uv sync --frozen` installs exactly what `uv.lock` says, and `UV_PYTHON_DOWNLOADS=never` makes uv use the Python of the image instead of downloading another one. The system libraries that OpenCV needs (`libgl1`, `libglib2.0-0`) are installed too. The image holds `main.py` and `wings/` but no models: mount the folder at `/app/backend/models`. The names of the model files come from the variables above, which `compose.yaml` passes on from the `.env` file. The container listens on port 8000. Docker Compose starts it and nginx forwards `/api/` to it, see [Run locally with Docker](../README.md#run-locally-with-docker).
 
 ## API
 
@@ -91,7 +93,7 @@ Both models are the same U-Net (one input channel, one output channel, 5 x 5 con
 
 | | `precise` | `rotation` |
 | --- | --- | --- |
-| Checkpoint | `final-precise.ckpt` | `final-rotation-2.ckpt` |
+| Checkpoint (default name) | `precise.ckpt` | `rotation.ckpt` |
 | Trained on | Upright wings of one handedness, without augmentation | Wings in any pose, mirrored ones too |
 | Matching | By rotation only | By rotation or reflection, started from 8 angles 45 degrees apart (each as it is and mirrored) and from the angles that PCA suggests |
 | Use it for | Upright wings with the base on the right | Wings in any pose |
