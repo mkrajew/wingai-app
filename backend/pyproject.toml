@@ -1,7 +1,7 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "WingAI backend: a FastAPI service that predicts the 19 landmarks of a honey bee forewing from an image"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
