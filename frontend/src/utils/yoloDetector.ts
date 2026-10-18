@@ -1,3 +1,9 @@
+/**
+ * Runs the wing detector (an Ultralytics YOLO model, AGPL-3.0) in the browser.
+ *
+ * The preprocessing and the decoding follow the Ultralytics inference so that the results match.
+ * This TypeScript code is written separately and includes no Ultralytics code.
+ */
 import * as ort from "onnxruntime-web/wasm";
 import { MODEL_URL, CACHE_NAME } from "./modelCache";
 import { axisAlignedGeometry, decodeObbRows } from "./obb";

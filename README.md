@@ -29,6 +29,15 @@
   <a href="#getting-started">Getting started</a>
 </p>
 
+---
+
+> 🌐 **WingAI is live:** https://wingai.ii.pw.edu.pl/  
+> Open the web app in your browser — no local installation required.
+
+<a href="https://wingai.ii.pw.edu.pl/" target="_blank">
+  <img src="https://img.shields.io/badge/Live%20demo-wingai.ii.pw.edu.pl-2ea44f?style=for-the-badge" alt="Live demo">
+</a>
+
 ## About
 
 **WingAI is a system for fully automatic detection of landmarks on the wings of the honey bee (*Apis mellifera*).** Drop in raw photos of wings and get back the numbered landmarks of every wing, ready for morphometric analysis.
@@ -229,6 +238,8 @@ Report bugs and ideas through [GitHub Issues](https://github.com/mkrajew/wingai-
 ## License
 
 WingAI uses the [GNU General Public License v3.0](LICENSE).
+
+The wing detector (`detector.onnx`) is not part of this repository and has its own license. It is a model made with [Ultralytics YOLO](https://github.com/ultralytics/ultralytics), and Ultralytics licenses its software and the models trained with it under the [GNU Affero General Public License v3.0](https://www.ultralytics.com/license). The code that trained the detector is in the [bees](https://github.com/mkrajew/bees) repository.
 
 ## Author
 

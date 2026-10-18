@@ -102,6 +102,7 @@ export type Translations = {
   howToUse: string;
   workflowLabel: string;
   keyboardShortcutsLabel: string;
+  sourceCode: string;
   steps: { step: string; detail: string }[];
   shortcuts: {
     context: string;
@@ -203,6 +204,7 @@ preview: "Preview",
   howToUse: "How to use WingAI",
   workflowLabel: "Workflow",
   keyboardShortcutsLabel: "Keyboard shortcuts",
+  sourceCode: "Source code",
   steps: [
     {
       step: "Upload images",
@@ -371,6 +373,7 @@ preview: "Podgląd",
   howToUse: "Jak używać WingAI",
   workflowLabel: "Przepływ pracy",
   keyboardShortcutsLabel: "Skróty klawiszowe",
+  sourceCode: "Kod źródłowy",
   steps: [
     {
       step: "Prześlij zdjęcia",

@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { HelpCircle } from "lucide-react";
 import { useT } from "../i18n";
 
+const REPO_URL = "https://github.com/mkrajew/wingai-app";
+
 export default function HelpPanel() {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -100,6 +102,16 @@ export default function HelpPanel() {
               </table>
             </div>
           ))}
+
+          <hr className="my-2" />
+
+          {/* Source code */}
+          <p className="small text-muted mb-0">
+            {t.sourceCode}:{" "}
+            <a href={REPO_URL} target="_blank" rel="noopener noreferrer">
+              {REPO_URL.replace("https://", "")}
+            </a>
+          </p>
         </div>
       )}
     </div>
