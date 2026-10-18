@@ -73,6 +73,41 @@ MODEL_SPECS = {
     ),
 }
 DEFAULT_MODEL = WingModel.rotation
+# Name of the file with the mean wing shape, in the models folder.
+MEAN_SHAPE_FILE = os.getenv("WINGAI_MEAN_SHAPE", "mean_shape.pth")
+
+
+class ModelFilesNotFound(RuntimeError):
+    """A file that the service loads at startup is missing from the models folder."""
+
+
+def check_model_files() -> None:
+    """Stop the startup with a readable message when a model file is missing.
+
+    Without it the first missing file surfaces as the FileNotFoundError of PyTorch,
+    after the models before it were loaded, and the other missing files stay unseen.
+    """
+    files = [
+        ("WINGAI_PRECISE_MODEL", MODEL_SPECS[WingModel.precise].checkpoint),
+        ("WINGAI_ROTATION_MODEL", MODEL_SPECS[WingModel.rotation].checkpoint),
+        ("WINGAI_MEAN_SHAPE", MEAN_SHAPE_FILE),
+    ]
+    missing = [(var, name) for var, name in files if not (MODELS_DIR / name).is_file()]
+    if not missing:
+        return
+
+    # The folder as it is named in the repository, also inside the container.
+    folder = f"{MODELS_DIR.parent.name}/{MODELS_DIR.name}"
+    variables = ", ".join(var for var, _ in missing)
+    advice = (
+        "Provide a compatible model file or set"
+        if len(missing) == 1
+        else "Provide compatible model files or set"
+    )
+    lines = ["WingAI startup failed:"]
+    lines += [f"Model file not found: {folder}/{name}" for _, name in missing]
+    lines += ["", advice, f"{variables} in your .env file."]
+    raise ModelFilesNotFound("\n".join(lines))
 
 
 def load_net(checkpoint: str, device: torch.device) -> LitNet:
@@ -92,6 +127,9 @@ def load_net(checkpoint: str, device: torch.device) -> LitNet:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail first, with a readable message, when a model file is missing.
+    check_model_files()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Every model is loaded once, here, and stays in memory while the server runs.
@@ -100,7 +138,7 @@ async def lifespan(app: FastAPI):
     }
 
     mean_coords = torch.load(
-        MODELS_DIR / os.getenv("WINGAI_MEAN_SHAPE", "mean_shape.pth"),
+        MODELS_DIR / MEAN_SHAPE_FILE,
         weights_only=False,
     )
 
